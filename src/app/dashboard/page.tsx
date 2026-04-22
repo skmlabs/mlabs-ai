@@ -1,42 +1,187 @@
-import { createClient } from "@/lib/supabase/server";
-import Link from "next/link";
-import { Plug } from "lucide-react";
+"use client";
 
-export default async function DashboardPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+import { useCallback, useEffect, useState } from "react";
+import { DateRangePills } from "@/components/DateRangePills";
+import { KpiCard } from "@/components/KpiCard";
+import { PendingAccessBanner } from "@/components/PendingAccessBanner";
+import { TrendChart } from "@/components/TrendChart";
+import type { DateRangeKey } from "@/lib/dateRange";
+import { Loader2, RefreshCw, MapPin, Star } from "lucide-react";
 
-  const { count: accountsCount } = await supabase
-    .from("connected_accounts").select("id", { count: "exact", head: true }).eq("user_id", user!.id).eq("provider", "gmb");
-  const { count: locationsCount } = await supabase
-    .from("locations").select("id", { count: "exact", head: true }).eq("user_id", user!.id).eq("is_active", true);
+type OverviewResponse = {
+  range: { key: DateRangeKey; label: string; start: string; end: string };
+  totals: { calls: number; directions: number; website: number; totalLocations: number };
+  byDate: Array<{ date: string; calls: number; directions: number; website: number }>;
+  topLocations: Array<{ location_id: string; title: string; calls: number; directions: number; website: number }>;
+  dataStatus: "ok" | "pending_api_access" | "never";
+  reviews: { avgRating: number | null; totalReviews: number; recent: Array<{ author: string | null; rating: number | null; text: string | null; publish_time: string | null; location_title: string | null }> };
+};
 
-  const name = (user?.user_metadata?.full_name as string | undefined) ?? user?.email ?? "";
+function fmt(n: number): string {
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return n.toLocaleString();
+}
+
+export default function OverviewPage() {
+  const [range, setRange] = useState<DateRangeKey>("28d");
+  const [data, setData] = useState<OverviewResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState<"metrics" | "reviews" | null>(null);
+  const [banner, setBanner] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/gmb/overview?range=${range}`);
+      if (!res.ok) throw new Error(await res.text());
+      setData(await res.json());
+    } catch (e) {
+      setBanner(e instanceof Error ? e.message : "Failed to load overview");
+    } finally {
+      setLoading(false);
+    }
+  }, [range]);
+  useEffect(() => { load(); }, [load]);
+
+  async function syncMetrics() {
+    setSyncing("metrics"); setBanner(null);
+    try {
+      const res = await fetch(`/api/gmb/metrics/sync?range=${range}`, { method: "POST" });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? "sync failed");
+      setBanner(`Metrics sync: ${j.synced} OK, ${j.pendingApiAccess} pending approval, ${j.errors} errors.`);
+      await load();
+    } catch (e) {
+      setBanner(e instanceof Error ? e.message : "Sync failed");
+    } finally { setSyncing(null); }
+  }
+
+  async function syncReviews() {
+    setSyncing("reviews"); setBanner(null);
+    try {
+      const res = await fetch("/api/gmb/reviews/sync", { method: "POST" });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? "sync failed");
+      setBanner(`Reviews sync: ${j.synced} locations updated, ${j.failed} failed.`);
+      await load();
+    } catch (e) {
+      setBanner(e instanceof Error ? e.message : "Sync failed");
+    } finally { setSyncing(null); }
+  }
+
+  if (loading) {
+    return <div className="flex items-center gap-2 text-muted text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Loading overview…</div>;
+  }
+  if (!data) return <div className="text-red-400 text-sm">Failed to load.</div>;
 
   return (
-    <div>
-      <h1 className="text-2xl font-bold">Overview</h1>
-      <p className="text-muted mt-1 text-sm">Welcome{name ? `, ${name}` : ""}.</p>
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Overview</h1>
+          <div className="text-xs text-muted mt-1">{data.range.label} · {data.range.start} to {data.range.end}</div>
+        </div>
+        <div className="flex items-center gap-2">
+          <DateRangePills value={range} onChange={setRange} />
+          <button onClick={syncMetrics} disabled={syncing !== null} className="text-xs border border-bg-border hover:border-brand-indigo rounded-md px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50">
+            {syncing === "metrics" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Sync metrics
+          </button>
+          <button onClick={syncReviews} disabled={syncing !== null} className="text-xs border border-bg-border hover:border-brand-indigo rounded-md px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50">
+            {syncing === "reviews" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Star className="h-3.5 w-3.5" />} Sync reviews
+          </button>
+        </div>
+      </div>
 
-      {(accountsCount ?? 0) === 0 ? (
-        <div className="mt-6 bg-bg-card border border-bg-border rounded-xl p-6 max-w-xl">
-          <div className="flex items-center gap-3 mb-2"><Plug className="h-5 w-5 text-brand-indigo" /><h2 className="text-base font-semibold">Connect your first account</h2></div>
-          <p className="text-sm text-muted mb-4">To start seeing insights, connect a Google Business Profile in Settings.</p>
-          <Link href="/dashboard/settings" className="inline-block bg-brand-indigo hover:bg-indigo-600 px-4 py-2 rounded-lg text-sm font-medium">Go to Settings</Link>
+      {banner ? <div className="bg-bg-card border border-bg-border rounded-lg px-4 py-3 text-sm text-muted">{banner}</div> : null}
+      {data.dataStatus === "pending_api_access" ? <PendingAccessBanner /> : null}
+
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <KpiCard label="Total calls" value={fmt(data.totals.calls)} />
+        <KpiCard label="Direction requests" value={fmt(data.totals.directions)} />
+        <KpiCard label="Website clicks" value={fmt(data.totals.website)} />
+        <KpiCard label="Active locations" value={data.totals.totalLocations} sub={data.reviews.avgRating != null ? `Avg rating ${data.reviews.avgRating.toFixed(1)} ★ · ${fmt(data.reviews.totalReviews)} reviews` : undefined} />
+      </div>
+
+      <TrendChart data={data.byDate} />
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <div className="bg-bg-card border border-bg-border rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-bg-border text-sm font-medium">Top locations</div>
+          {data.topLocations.length === 0 ? (
+            <div className="p-4 text-muted text-sm">No locations yet.</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-bg">
+                <tr className="text-[11px] uppercase tracking-wider text-muted">
+                  <th className="text-left px-4 py-2">Location</th>
+                  <th className="text-right px-4 py-2">Calls</th>
+                  <th className="text-right px-4 py-2">Directions</th>
+                  <th className="text-right px-4 py-2">Website</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.topLocations.map(t => (
+                  <tr key={t.location_id} className="border-t border-bg-border">
+                    <td className="px-4 py-2 flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-brand-indigo" /> {t.title}</td>
+                    <td className="px-4 py-2 text-right">{fmt(t.calls)}</td>
+                    <td className="px-4 py-2 text-right">{fmt(t.directions)}</td>
+                    <td className="px-4 py-2 text-right">{fmt(t.website)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
         </div>
-      ) : (
-        <div className="mt-6 grid grid-cols-2 gap-4 max-w-xl">
-          <div className="bg-bg-card border border-bg-border rounded-xl p-4">
-            <div className="text-xs uppercase tracking-wider text-muted">Connected accounts</div>
-            <div className="text-3xl font-bold mt-1">{accountsCount ?? 0}</div>
-          </div>
-          <div className="bg-bg-card border border-bg-border rounded-xl p-4">
-            <div className="text-xs uppercase tracking-wider text-muted">Active locations</div>
-            <div className="text-3xl font-bold mt-1">{locationsCount ?? 0}</div>
-          </div>
+
+        <div className="bg-bg-card border border-bg-border rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-bg-border text-sm font-medium">Recent reviews</div>
+          {data.reviews.recent.length === 0 ? (
+            <div className="p-4 text-muted text-sm">No reviews yet. Click &quot;Sync reviews&quot; above.</div>
+          ) : (
+            <ul className="divide-y divide-bg-border">
+              {data.reviews.recent.map((r, i) => (
+                <li key={i} className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs font-medium">{r.author ?? "Anonymous"}{r.location_title ? <span className="text-muted"> · {r.location_title}</span> : null}</div>
+                    {typeof r.rating === "number" ? <div className="text-xs flex items-center gap-0.5 text-amber-300"><Star className="h-3 w-3 fill-amber-300" /> {r.rating}</div> : null}
+                  </div>
+                  {r.text ? <div className="text-xs text-muted mt-1 line-clamp-3">{r.text}</div> : null}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
-      )}
-      <p className="text-xs text-muted mt-8">Metrics (calls, directions, website clicks) will populate after Day 3 is built and Google Business Profile API access is approved.</p>
+      </div>
+
+      <div className="bg-bg-card border border-bg-border rounded-xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-bg-border text-sm font-medium">Daily breakdown</div>
+        {data.byDate.length === 0 ? (
+          <div className="p-4 text-muted text-sm">No daily data for this range.</div>
+        ) : (
+          <div className="max-h-[320px] overflow-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-bg sticky top-0">
+                <tr className="text-[11px] uppercase tracking-wider text-muted">
+                  <th className="text-left px-4 py-2">Date</th>
+                  <th className="text-right px-4 py-2">Calls</th>
+                  <th className="text-right px-4 py-2">Directions</th>
+                  <th className="text-right px-4 py-2">Website</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.byDate.map(d => (
+                  <tr key={d.date} className="border-t border-bg-border">
+                    <td className="px-4 py-2">{d.date}</td>
+                    <td className="px-4 py-2 text-right">{fmt(d.calls)}</td>
+                    <td className="px-4 py-2 text-right">{fmt(d.directions)}</td>
+                    <td className="px-4 py-2 text-right">{fmt(d.website)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
