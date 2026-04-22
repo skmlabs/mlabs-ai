@@ -1,0 +1,169 @@
+"use client";
+
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { FilterPill } from "@/components/FilterPill";
+import { Loader2, Star, MapPin, ChevronDown, ChevronUp } from "lucide-react";
+
+type Group = {
+  location_id: string;
+  title: string;
+  address: string | null;
+  avg_rating: number | null;
+  total_reviews: number;
+  distribution: { 1: number; 2: number; 3: number; 4: number; 5: number };
+  reviews: Array<{ id: string; author_name: string | null; author_photo_url: string | null; rating: number | null; text: string | null; publish_time: string | null }>;
+};
+
+const STAR_FILTERS = [
+  { label: "All", min: "", max: "" },
+  { label: "5 ★", min: "5", max: "5" },
+  { label: "4 ★", min: "4", max: "4" },
+  { label: "3 ★", min: "3", max: "3" },
+  { label: "1–2 ★", min: "1", max: "2" },
+];
+
+export default function ReviewsPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center gap-2 text-muted text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Loading reviews…</div>}>
+      <ReviewsInner />
+    </Suspense>
+  );
+}
+
+function ReviewsInner() {
+  const search = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const locationId = search.get("locationId");
+  const minRating = search.get("minRating") ?? "";
+  const maxRating = search.get("maxRating") ?? "";
+
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const qs = new URLSearchParams();
+    if (locationId) qs.set("locationId", locationId);
+    if (minRating) qs.set("minRating", minRating);
+    if (maxRating) qs.set("maxRating", maxRating);
+    const res = await fetch(`/api/gmb/reviews-by-location?${qs.toString()}`);
+    const j = await res.json() as { groups: Group[] };
+    setGroups(j.groups);
+    if (j.groups.length === 1) {
+      const first = j.groups[0];
+      if (first) setExpanded({ [first.location_id]: true });
+    }
+    setLoading(false);
+  }, [locationId, minRating, maxRating]);
+  useEffect(() => { load(); }, [load]);
+
+  const filteredTitle = locationId ? groups.find(g => g.location_id === locationId)?.title ?? null : null;
+
+  function setStarFilter(min: string, max: string) {
+    const p = new URLSearchParams(search.toString());
+    if (min) p.set("minRating", min); else p.delete("minRating");
+    if (max) p.set("maxRating", max); else p.delete("maxRating");
+    router.push(`${pathname}${p.toString() ? "?" + p.toString() : ""}`);
+  }
+
+  function toggle(locId: string) {
+    setExpanded(e => ({ ...e, [locId]: !e[locId] }));
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold">Reviews</h1>
+          <div className="text-xs text-muted mt-1">Grouped by location, most recent first.</div>
+        </div>
+        <div className="inline-flex bg-bg-card border border-bg-border rounded-lg p-1 text-xs">
+          {STAR_FILTERS.map(f => {
+            const active = (f.min === minRating) && (f.max === maxRating);
+            return (
+              <button key={f.label} onClick={() => setStarFilter(f.min, f.max)} className={`px-3 py-1.5 rounded-md transition ${active ? "bg-brand-indigo text-white" : "text-muted hover:text-white"}`}>
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {filteredTitle ? <FilterPill locationTitle={filteredTitle} /> : null}
+
+      {loading ? (
+        <div className="flex items-center gap-2 text-muted text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Loading reviews…</div>
+      ) : groups.length === 0 ? (
+        <div className="bg-bg-card border border-bg-border rounded-xl p-6 text-sm text-muted">
+          No reviews yet. Go to Overview and click &quot;Sync reviews&quot;.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {groups.map(g => {
+            const isOpen = expanded[g.location_id] ?? groups.length <= 2;
+            const maxDist = Math.max(g.distribution[1], g.distribution[2], g.distribution[3], g.distribution[4], g.distribution[5], 1);
+            return (
+              <div key={g.location_id} className="bg-bg-card border border-bg-border rounded-xl overflow-hidden">
+                <button onClick={() => toggle(g.location_id)} className="w-full text-left px-4 py-3 border-b border-bg-border flex items-center justify-between hover:bg-bg transition">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-3.5 w-3.5 text-brand-indigo" />
+                      <span className="font-medium">{g.title}</span>
+                      {g.avg_rating != null ? <span className="inline-flex items-center gap-1 text-xs text-amber-300 ml-2"><Star className="h-3 w-3 fill-amber-300" /> {g.avg_rating.toFixed(1)}</span> : null}
+                      <span className="text-xs text-muted">· {g.total_reviews} reviews · {g.reviews.length} shown</span>
+                    </div>
+                    {g.address ? <div className="text-[11px] text-muted mt-0.5 ml-5">{g.address}</div> : null}
+                  </div>
+                  {isOpen ? <ChevronUp className="h-4 w-4 text-muted" /> : <ChevronDown className="h-4 w-4 text-muted" />}
+                </button>
+
+                {isOpen ? (
+                  <div className="p-4 space-y-4">
+                    <div className="space-y-1">
+                      {([5, 4, 3, 2, 1] as const).map(star => {
+                        const count = g.distribution[star];
+                        const pct = (count / maxDist) * 100;
+                        return (
+                          <div key={star} className="flex items-center gap-2 text-xs">
+                            <span className="w-4 text-muted">{star}</span>
+                            <Star className="h-3 w-3 text-amber-300 fill-amber-300" />
+                            <div className="flex-1 bg-bg rounded-full h-2 overflow-hidden">
+                              <div className="bg-amber-400/60 h-full" style={{ width: `${pct}%` }} />
+                            </div>
+                            <span className="w-10 text-right text-muted">{count}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {g.reviews.length === 0 ? (
+                      <div className="text-xs text-muted">No reviews match the current filter.</div>
+                    ) : (
+                      <ul className="divide-y divide-bg-border">
+                        {g.reviews.map(r => (
+                          <li key={r.id} className="py-3">
+                            <div className="flex items-center justify-between">
+                              <div className="text-xs font-medium">{r.author_name ?? "Anonymous"}</div>
+                              <div className="flex items-center gap-2">
+                                {typeof r.rating === "number" ? <span className="text-xs flex items-center gap-0.5 text-amber-300"><Star className="h-3 w-3 fill-amber-300" /> {r.rating}</span> : null}
+                                {r.publish_time ? <span className="text-[11px] text-muted">{new Date(r.publish_time).toLocaleDateString()}</span> : null}
+                              </div>
+                            </div>
+                            {r.text ? <div className="text-xs text-muted mt-1 whitespace-pre-line">{r.text}</div> : <div className="text-[11px] text-muted italic mt-1">No text</div>}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

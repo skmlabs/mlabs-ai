@@ -1,15 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { DateRangePills } from "@/components/DateRangePills";
 import { KpiCard } from "@/components/KpiCard";
 import { PendingAccessBanner } from "@/components/PendingAccessBanner";
 import { TrendChart } from "@/components/TrendChart";
+import { FilterPill } from "@/components/FilterPill";
 import type { DateRangeKey } from "@/lib/dateRange";
 import { Loader2, RefreshCw, MapPin, Star } from "lucide-react";
 
 type OverviewResponse = {
   range: { key: DateRangeKey; label: string; start: string; end: string };
+  locationFilter: string | null;
   totals: { calls: number; directions: number; website: number; totalLocations: number };
   byDate: Array<{ date: string; calls: number; directions: number; website: number }>;
   topLocations: Array<{ location_id: string; title: string; calls: number; directions: number; website: number }>;
@@ -23,8 +26,22 @@ function fmt(n: number): string {
 }
 
 export default function OverviewPage() {
-  const [range, setRange] = useState<DateRangeKey>("28d");
+  return (
+    <Suspense fallback={<div className="flex items-center gap-2 text-muted text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Loading overview…</div>}>
+      <OverviewInner />
+    </Suspense>
+  );
+}
+
+function OverviewInner() {
+  const search = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const range = (search.get("range") ?? "28d") as DateRangeKey;
+  const locationId = search.get("locationId");
+
   const [data, setData] = useState<OverviewResponse | null>(null);
+  const [filteredTitle, setFilteredTitle] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<"metrics" | "reviews" | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
@@ -32,16 +49,31 @@ export default function OverviewPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/gmb/overview?range=${range}`);
+      const qs = new URLSearchParams({ range });
+      if (locationId) qs.set("locationId", locationId);
+      const res = await fetch(`/api/gmb/overview?${qs.toString()}`);
       if (!res.ok) throw new Error(await res.text());
-      setData(await res.json());
+      const json = await res.json() as OverviewResponse;
+      setData(json);
+      if (locationId && json.topLocations.length > 0) {
+        const match = json.topLocations.find(t => t.location_id === locationId);
+        setFilteredTitle(match?.title ?? null);
+      } else {
+        setFilteredTitle(null);
+      }
     } catch (e) {
       setBanner(e instanceof Error ? e.message : "Failed to load overview");
     } finally {
       setLoading(false);
     }
-  }, [range]);
+  }, [range, locationId]);
   useEffect(() => { load(); }, [load]);
+
+  function setRange(k: DateRangeKey) {
+    const p = new URLSearchParams(search.toString());
+    p.set("range", k);
+    router.push(`${pathname}?${p.toString()}`);
+  }
 
   async function syncMetrics() {
     setSyncing("metrics"); setBanner(null);
@@ -92,6 +124,8 @@ export default function OverviewPage() {
         </div>
       </div>
 
+      {filteredTitle ? <FilterPill locationTitle={filteredTitle} /> : null}
+
       {banner ? <div className="bg-bg-card border border-bg-border rounded-lg px-4 py-3 text-sm text-muted">{banner}</div> : null}
       {data.dataStatus === "pending_api_access" ? <PendingAccessBanner /> : null}
 
@@ -99,7 +133,7 @@ export default function OverviewPage() {
         <KpiCard label="Total calls" value={fmt(data.totals.calls)} />
         <KpiCard label="Direction requests" value={fmt(data.totals.directions)} />
         <KpiCard label="Website clicks" value={fmt(data.totals.website)} />
-        <KpiCard label="Active locations" value={data.totals.totalLocations} sub={data.reviews.avgRating != null ? `Avg rating ${data.reviews.avgRating.toFixed(1)} ★ · ${fmt(data.reviews.totalReviews)} reviews` : undefined} />
+        <KpiCard label={locationId ? "Filtered" : "Active locations"} value={data.totals.totalLocations} sub={data.reviews.avgRating != null ? `Avg rating ${data.reviews.avgRating.toFixed(1)} ★ · ${fmt(data.reviews.totalReviews)} reviews` : undefined} />
       </div>
 
       <TrendChart data={data.byDate} />
@@ -121,7 +155,15 @@ export default function OverviewPage() {
               </thead>
               <tbody>
                 {data.topLocations.map(t => (
-                  <tr key={t.location_id} className="border-t border-bg-border">
+                  <tr
+                    key={t.location_id}
+                    className="border-t border-bg-border hover:bg-bg cursor-pointer"
+                    onClick={() => {
+                      const p = new URLSearchParams(search.toString());
+                      p.set("locationId", t.location_id);
+                      router.push(`${pathname}?${p.toString()}`);
+                    }}
+                  >
                     <td className="px-4 py-2 flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-brand-indigo" /> {t.title}</td>
                     <td className="px-4 py-2 text-right">{fmt(t.calls)}</td>
                     <td className="px-4 py-2 text-right">{fmt(t.directions)}</td>
