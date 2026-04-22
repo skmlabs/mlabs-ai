@@ -15,3 +15,5 @@ build/
 /playwright/.cache
 # Decision (Prompt 1A): tsc incremental build artifact; not in prompt's gitignore but obviously shouldn't be committed
 *.tsbuildinfo
+# Decision (Prompt 1B): local Claude Code state — not shared
+.claude/
