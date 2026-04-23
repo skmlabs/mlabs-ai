@@ -1,8 +1,8 @@
-# MLabs AI — Marketing Intelligence Platform
+# Local AI — by MLabs Digital
 
-Multi-tenant SaaS for marketing intelligence. Users sign in with Google, connect their Google Business Profile (and more connectors over time), and get unified insights on calls, directions, reviews, and local visibility. Built for multi-location brands and agencies.
+Repo: `mlabs-ai`. Product name: **Local AI**. Multi-tenant SaaS for local marketing intelligence. Users sign in with Google, connect their Google Business Profile, and get unified insights on calls, directions, reviews, and local visibility across all their locations. Built for multi-location enterprises and agencies.
 
-**Live:** https://app.mlabsdigital.org
+**Live:** https://local.mlabsdigital.org
 **Company:** [MLabs Digital](https://mlabsdigital.org)
 
 ## Stack

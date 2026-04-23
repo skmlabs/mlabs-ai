@@ -39,6 +39,8 @@ function OverviewInner() {
   const pathname = usePathname();
   const range = (search.get("range") ?? "28d") as DateRangeKey;
   const locationId = search.get("locationId");
+  const customStart = search.get("start") ?? undefined;
+  const customEnd = search.get("end") ?? undefined;
 
   const [data, setData] = useState<OverviewResponse | null>(null);
   const [filteredTitle, setFilteredTitle] = useState<string | null>(null);
@@ -51,6 +53,10 @@ function OverviewInner() {
     try {
       const qs = new URLSearchParams({ range });
       if (locationId) qs.set("locationId", locationId);
+      if (range === "custom" && customStart && customEnd) {
+        qs.set("start", customStart);
+        qs.set("end", customEnd);
+      }
       const res = await fetch(`/api/gmb/overview?${qs.toString()}`);
       if (!res.ok) throw new Error(await res.text());
       const json = await res.json() as OverviewResponse;
@@ -66,19 +72,33 @@ function OverviewInner() {
     } finally {
       setLoading(false);
     }
-  }, [range, locationId]);
+  }, [range, locationId, customStart, customEnd]);
   useEffect(() => { load(); }, [load]);
 
   function setRange(k: DateRangeKey) {
     const p = new URLSearchParams(search.toString());
     p.set("range", k);
+    if (k !== "custom") { p.delete("start"); p.delete("end"); }
+    router.push(`${pathname}?${p.toString()}`);
+  }
+
+  function applyCustomRange(start: string, end: string) {
+    const p = new URLSearchParams(search.toString());
+    p.set("range", "custom");
+    p.set("start", start);
+    p.set("end", end);
     router.push(`${pathname}?${p.toString()}`);
   }
 
   async function syncMetrics() {
     setSyncing("metrics"); setBanner(null);
     try {
-      const res = await fetch(`/api/gmb/metrics/sync?range=${range}`, { method: "POST" });
+      const qs = new URLSearchParams({ range });
+      if (range === "custom" && customStart && customEnd) {
+        qs.set("start", customStart);
+        qs.set("end", customEnd);
+      }
+      const res = await fetch(`/api/gmb/metrics/sync?${qs.toString()}`, { method: "POST" });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "sync failed");
       setBanner(`Metrics sync: ${j.synced} OK, ${j.pendingApiAccess} pending approval, ${j.errors} errors.`);
@@ -114,7 +134,7 @@ function OverviewInner() {
           <div className="text-xs text-muted mt-1">{data.range.label} · {data.range.start} to {data.range.end}</div>
         </div>
         <div className="flex items-center gap-2">
-          <DateRangePills value={range} onChange={setRange} />
+          <DateRangePills value={range} onChange={setRange} onCustomApply={applyCustomRange} customStart={customStart} customEnd={customEnd} />
           <button onClick={syncMetrics} disabled={syncing !== null} className="text-xs border border-bg-border hover:border-brand-indigo rounded-md px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50">
             {syncing === "metrics" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Sync metrics
           </button>

@@ -46,6 +46,8 @@ function LocationsInner() {
   const pathname = usePathname();
   const range = (search.get("range") ?? "28d") as DateRangeKey;
   const locationId = search.get("locationId");
+  const customStart = search.get("start") ?? undefined;
+  const customEnd = search.get("end") ?? undefined;
 
   const [rows, setRows] = useState<Row[]>([]);
   const [meta, setMeta] = useState<{ label: string; start: string; end: string } | null>(null);
@@ -56,7 +58,12 @@ function LocationsInner() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/gmb/locations-table?range=${range}`);
+      const qs = new URLSearchParams({ range });
+      if (range === "custom" && customStart && customEnd) {
+        qs.set("start", customStart);
+        qs.set("end", customEnd);
+      }
+      const res = await fetch(`/api/gmb/locations-table?${qs.toString()}`);
       if (!res.ok) throw new Error(await res.text());
       const j = await res.json() as { rows: Row[]; range: { label: string; start: string; end: string } };
       setRows(j.rows);
@@ -64,7 +71,7 @@ function LocationsInner() {
     } finally {
       setLoading(false);
     }
-  }, [range]);
+  }, [range, customStart, customEnd]);
   useEffect(() => { load(); }, [load]);
 
   const sortedRows = useMemo(() => {
@@ -93,6 +100,15 @@ function LocationsInner() {
   function setRange(k: DateRangeKey) {
     const p = new URLSearchParams(search.toString());
     p.set("range", k);
+    if (k !== "custom") { p.delete("start"); p.delete("end"); }
+    router.push(`${pathname}?${p.toString()}`);
+  }
+
+  function applyCustomRange(start: string, end: string) {
+    const p = new URLSearchParams(search.toString());
+    p.set("range", "custom");
+    p.set("start", start);
+    p.set("end", end);
     router.push(`${pathname}?${p.toString()}`);
   }
 
@@ -127,7 +143,7 @@ function LocationsInner() {
           <div className="text-xs text-muted mt-1">{meta ? `${meta.label} · ${meta.start} to ${meta.end}` : ""}</div>
         </div>
         <div className="flex items-center gap-2">
-          <DateRangePills value={range} onChange={setRange} />
+          <DateRangePills value={range} onChange={setRange} onCustomApply={applyCustomRange} customStart={customStart} customEnd={customEnd} />
           <button onClick={onExport} disabled={rows.length === 0} className="text-xs border border-bg-border hover:border-brand-indigo rounded-md px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50">
             <Download className="h-3.5 w-3.5" /> Export Excel
           </button>

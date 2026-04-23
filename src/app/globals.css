@@ -3,3 +3,84 @@
 @tailwind utilities;
 :root { color-scheme: dark; }
 html, body { height: 100%; }
+
+/* Phone input custom styling for dark theme */
+.phone-input-custom input,
+.PhoneInputInput {
+  background: transparent !important;
+  color: white !important;
+  border: none !important;
+  outline: none !important;
+  font-size: 0.875rem;
+  width: 100%;
+}
+.PhoneInputCountry {
+  margin-right: 0.5rem;
+}
+.PhoneInputCountrySelect {
+  color: white;
+}
+.PhoneInputCountryIcon {
+  box-shadow: none !important;
+}
+.PhoneInputCountryIconImg {
+  border-radius: 2px;
+}
+
+/* react-day-picker dark theme */
+.rdp-root {
+  --rdp-accent-color: #6366f1;
+  --rdp-accent-background-color: rgba(99, 102, 241, 0.15);
+  --rdp-day-height: 2.25rem;
+  --rdp-day-width: 2.25rem;
+  --rdp-day_button-height: 2.25rem;
+  --rdp-day_button-width: 2.25rem;
+  --rdp-day_button-border-radius: 0.5rem;
+  --rdp-selected-border: 1px solid #6366f1;
+  --rdp-today-color: #f59e0b;
+  color: #fff;
+  font-size: 0.875rem;
+}
+.rdp-month_caption {
+  font-weight: 600;
+  color: #fff;
+}
+.rdp-weekday {
+  color: #8a8fa0;
+  font-weight: 500;
+  text-transform: uppercase;
+  font-size: 0.625rem;
+}
+.rdp-day_button {
+  color: #fff;
+  background: transparent;
+  transition: background 0.15s;
+}
+.rdp-day_button:hover:not(:disabled) {
+  background: rgba(99, 102, 241, 0.2);
+}
+.rdp-day.rdp-selected .rdp-day_button,
+.rdp-day.rdp-range_start .rdp-day_button,
+.rdp-day.rdp-range_end .rdp-day_button {
+  background: #6366f1;
+  color: #fff;
+}
+.rdp-day.rdp-range_middle .rdp-day_button {
+  background: rgba(99, 102, 241, 0.2);
+  color: #fff;
+  border-radius: 0;
+}
+.rdp-day.rdp-outside .rdp-day_button {
+  color: #4b5060;
+}
+.rdp-day.rdp-disabled .rdp-day_button {
+  color: #3a3f50;
+  cursor: not-allowed;
+}
+.rdp-chevron {
+  fill: #8a8fa0;
+}
+.rdp-button_previous:hover .rdp-chevron,
+.rdp-button_next:hover .rdp-chevron {
+  fill: #fff;
+}

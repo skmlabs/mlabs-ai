@@ -29,7 +29,7 @@ function LoginContent() {
   return (
     <main className="min-h-screen flex items-center justify-center p-6">
       <div className="bg-bg-card border border-bg-border rounded-xl p-8 w-full max-w-md">
-        <div className="text-xs uppercase tracking-widest text-brand-indigo mb-2">MLabs AI</div>
+        <div className="text-xs uppercase tracking-widest text-brand-indigo mb-2">Local AI</div>
         <h2 className="text-2xl font-bold mb-2">Sign in</h2>
         <p className="text-muted text-sm mb-6">Use your Google account to continue.</p>
         <button

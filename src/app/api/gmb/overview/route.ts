@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { getDateRange, toYMD, type DateRangeKey } from "@/lib/dateRange";
+import { getDateRange, toYMD, isValidYMD, type DateRangeKey } from "@/lib/dateRange";
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -10,7 +10,12 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const rangeKey = (searchParams.get("range") ?? "28d") as DateRangeKey;
   const locationFilter = searchParams.get("locationId");
-  const { start, end, label } = getDateRange(rangeKey);
+  const customStart = searchParams.get("start");
+  const customEnd = searchParams.get("end");
+  const custom = rangeKey === "custom" && isValidYMD(customStart) && isValidYMD(customEnd)
+    ? { start: customStart, end: customEnd }
+    : undefined;
+  const { start, end, label } = getDateRange(rangeKey, custom);
   const startYmd = toYMD(start), endYmd = toYMD(end);
 
   // Locations
