@@ -102,7 +102,7 @@ function LocationsInner() {
     router.push(`${pathname}${p.toString() ? "?" + p.toString() : ""}`);
   }
 
-  function onExport() {
+  async function onExport() {
     const payload = visibleRows.map(r => ({
       Location: r.title,
       Address: r.address ?? "",
@@ -116,7 +116,7 @@ function LocationsInner() {
       "Metrics status": r.metrics_status,
     }));
     const fname = `mlabs-ai-locations-${meta?.start ?? ""}-to-${meta?.end ?? ""}.xlsx`;
-    exportToExcel(payload, fname, "Locations");
+   await exportToExcel(payload, fname, "Locations");
   }
 
   return (
