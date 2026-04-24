@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ContactSalesTrigger } from "@/components/ContactSalesTrigger";
-import { AnimatedMap } from "@/components/AnimatedMap";
+import { DashboardPreviewMockup } from "@/components/DashboardPreviewMockup";
 import { MapPin, Star, Sparkles } from "lucide-react";
 
 export default function Home() {
@@ -23,9 +23,8 @@ export default function Home() {
       </header>
 
       {/* Hero */}
-      <section className="relative overflow-hidden">
-        <AnimatedMap />
-        <div className="relative z-10 max-w-4xl mx-auto px-6 py-24 md:py-32 text-center space-y-6">
+      <section className="px-6 py-16 md:py-24">
+        <div className="max-w-4xl mx-auto text-center space-y-6">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-indigo/10 border border-brand-indigo/30 text-xs uppercase tracking-widest text-brand-indigo">
             <Sparkles className="h-3 w-3" />
             Local AI · by MLabs Digital
@@ -45,6 +44,7 @@ export default function Home() {
           </div>
           <p className="text-xs text-muted pt-4">Private beta · Serving enterprises and agencies</p>
         </div>
+        <DashboardPreviewMockup />
       </section>
 
       {/* Value Props */}
@@ -157,14 +157,14 @@ export default function Home() {
               <p className="text-xs text-muted">A product of MLabs Digital · Built in India · Serving businesses globally.</p>
             </div>
             <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted">
-              <a href="https://mlabsdigital.org" target="_blank" rel="noopener noreferrer" className="hover:text-white">About MLabs</a>
+              <a href="https://mlabsdigital.org/about-us/" target="_blank" rel="noopener noreferrer" className="hover:text-white">About</a>
               <ContactSalesTrigger label="Contact Sales" variant="link" size="sm" />
               <a href="https://mlabsdigital.org/privacy-policy/" target="_blank" rel="noopener noreferrer" className="hover:text-white">Privacy</a>
               <a href="https://mlabsdigital.org/terms/" target="_blank" rel="noopener noreferrer" className="hover:text-white">Terms</a>
             </div>
           </div>
           <div className="mt-6 pt-6 border-t border-bg-border text-xs text-muted text-center">
-            © {new Date().getFullYear()} MLabs Digital Private Limited · CIN U80903DL2016PTC300259
+            © {new Date().getFullYear()} MLabs Digital Private Limited
           </div>
         </div>
       </footer>

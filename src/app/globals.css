@@ -84,3 +84,28 @@ html, body { height: 100%; }
 .rdp-button_next:hover .rdp-chevron {
   fill: #fff;
 }
+
+/* Floating animations for dashboard preview cards */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+@keyframes float-delayed {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+@keyframes float-slower {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-4px); }
+}
+.animate-float {
+  animation: float 6s ease-in-out infinite;
+}
+.animate-float-delayed {
+  animation: float-delayed 7s ease-in-out infinite;
+  animation-delay: 1.5s;
+}
+.animate-float-slower {
+  animation: float-slower 8s ease-in-out infinite;
+  animation-delay: 3s;
+}

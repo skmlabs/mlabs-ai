@@ -4,7 +4,6 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { DateRangePills } from "@/components/DateRangePills";
 import { FilterPill } from "@/components/FilterPill";
-import { PendingAccessBanner } from "@/components/PendingAccessBanner";
 import { SortableHeader, type SortDir } from "@/components/SortableHeader";
 import { exportToExcel } from "@/lib/excel";
 import type { DateRangeKey } from "@/lib/dateRange";
@@ -90,8 +89,6 @@ function LocationsInner() {
   const filteredTitle = locationId ? rows.find(r => r.id === locationId)?.title ?? null : null;
   const visibleRows = locationId ? sortedRows.filter(r => r.id === locationId) : sortedRows;
 
-  const anyPending = rows.some(r => r.metrics_status === "pending_api_access");
-
   function toggleSort(k: SortKey) {
     if (sortKey === k) setSortDir(d => d === "asc" ? "desc" : "asc");
     else { setSortKey(k); setSortDir("desc"); }
@@ -151,7 +148,6 @@ function LocationsInner() {
       </div>
 
       {filteredTitle ? <FilterPill locationTitle={filteredTitle} /> : null}
-      {anyPending ? <PendingAccessBanner /> : null}
 
       {loading ? (
         <div className="flex items-center gap-2 text-muted text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>

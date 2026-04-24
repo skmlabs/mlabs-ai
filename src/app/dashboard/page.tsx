@@ -4,7 +4,6 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { DateRangePills } from "@/components/DateRangePills";
 import { KpiCard } from "@/components/KpiCard";
-import { PendingAccessBanner } from "@/components/PendingAccessBanner";
 import { TrendChart } from "@/components/TrendChart";
 import { FilterPill } from "@/components/FilterPill";
 import type { DateRangeKey } from "@/lib/dateRange";
@@ -147,7 +146,6 @@ function OverviewInner() {
       {filteredTitle ? <FilterPill locationTitle={filteredTitle} /> : null}
 
       {banner ? <div className="bg-bg-card border border-bg-border rounded-lg px-4 py-3 text-sm text-muted">{banner}</div> : null}
-      {data.dataStatus === "pending_api_access" ? <PendingAccessBanner /> : null}
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <KpiCard label="Total calls" value={fmt(data.totals.calls)} />
