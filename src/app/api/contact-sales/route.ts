@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       try {
         const resend = new Resend(resendKey);
         await resend.emails.send({
-          from: "Local AI <noreply@send.mlabsdigital.org>",
+          from: "Local AI <noreply@mlabsdigital.org>",
           to: notifyEmails,
           replyTo: email,
           subject: `New Lead: ${company} — ${name}`,
