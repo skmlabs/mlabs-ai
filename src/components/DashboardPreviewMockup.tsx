@@ -96,7 +96,7 @@ export function DashboardPreviewMockup() {
           <Star className="h-3.5 w-3.5 text-brand-amber fill-brand-amber" />
           <span className="text-[10px] text-muted uppercase tracking-wide">New review</span>
         </div>
-        <div className="text-xs font-semibold">Vetic GK</div>
+        <div className="text-xs font-semibold">Your Business</div>
         <div className="flex items-center gap-0.5 mt-1">
           {[1,2,3,4,5].map(i => <Star key={i} className="h-2.5 w-2.5 text-brand-amber fill-brand-amber" />)}
         </div>

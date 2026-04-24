@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ContactSalesTrigger } from "@/components/ContactSalesTrigger";
 import { DashboardPreviewMockup } from "@/components/DashboardPreviewMockup";
-import { MapPin, Star, Sparkles } from "lucide-react";
+import { MapPin, Star, Sparkles, Layers, BarChart3 } from "lucide-react";
 
 export default function Home() {
   return (
@@ -27,7 +27,7 @@ export default function Home() {
         <div className="max-w-4xl mx-auto text-center space-y-6">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-indigo/10 border border-brand-indigo/30 text-xs uppercase tracking-widest text-brand-indigo">
             <Sparkles className="h-3 w-3" />
-            Local AI · by MLabs Digital
+            Local AI
           </div>
           <h1 className="text-5xl md:text-7xl font-bold leading-tight tracking-tight">
             Know your Google presence.<br />
@@ -42,38 +42,60 @@ export default function Home() {
             </Link>
             <ContactSalesTrigger label="Book a demo →" variant="outline" size="lg" />
           </div>
-          <p className="text-xs text-muted pt-4">Private beta · Serving enterprises and agencies</p>
         </div>
         <DashboardPreviewMockup />
       </section>
 
       {/* Value Props */}
-      <section className="max-w-5xl mx-auto px-6 py-20">
+      <section className="max-w-6xl mx-auto px-6 py-20">
         <div className="text-center mb-14">
           <div className="text-xs uppercase tracking-widest text-brand-amber mb-2">Why Local AI</div>
           <h2 className="text-3xl md:text-4xl font-bold">One place for everything local</h2>
         </div>
-        <div className="grid md:grid-cols-3 gap-6">
+
+        {/* Row 1: 3 cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <div className="bg-bg-card border border-bg-border rounded-xl p-6 hover:border-brand-indigo/50 hover:shadow-lg hover:shadow-brand-indigo/10 transition">
             <div className="w-10 h-10 rounded-lg bg-brand-indigo/10 border border-brand-indigo/30 flex items-center justify-center mb-4">
               <MapPin className="h-5 w-5 text-brand-indigo" />
             </div>
-            <h3 className="font-semibold text-lg mb-2">Built for multi-location</h3>
-            <p className="text-sm text-muted">Track every location in one place. Filter, compare, drill down — instantly. Whether you have 2 stores or 200.</p>
+            <h3 className="font-semibold text-lg mb-2">Multi-location aware</h3>
+            <p className="text-sm text-muted">Track every location in one place. Filter, compare, drill down — instantly. Whether you have 1 location or 200.</p>
           </div>
+
+          <div className="bg-bg-card border border-bg-border rounded-xl p-6 hover:border-brand-indigo/50 hover:shadow-lg hover:shadow-brand-indigo/10 transition">
+            <div className="w-10 h-10 rounded-lg bg-brand-indigo/10 border border-brand-indigo/30 flex items-center justify-center mb-4">
+              <Layers className="h-5 w-5 text-brand-indigo" />
+            </div>
+            <h3 className="font-semibold text-lg mb-2">Unified data</h3>
+            <p className="text-sm text-muted">Calls, directions, website clicks, reviews, and ratings — all your Google signals in one place. No more jumping between tabs or apps.</p>
+          </div>
+
           <div className="bg-bg-card border border-bg-border rounded-xl p-6 hover:border-brand-amber/50 hover:shadow-lg hover:shadow-brand-amber/10 transition">
             <div className="w-10 h-10 rounded-lg bg-brand-amber/10 border border-brand-amber/30 flex items-center justify-center mb-4">
               <Star className="h-5 w-5 text-brand-amber fill-brand-amber" />
             </div>
             <h3 className="font-semibold text-lg mb-2">Reviews, managed</h3>
-            <p className="text-sm text-muted">See reviews from all locations in one feed. Reply without switching tabs. Never miss a response.</p>
+            <p className="text-sm text-muted">Every review from every location in one feed. Reply without switching tabs. Never miss a response.</p>
           </div>
+        </div>
+
+        {/* Row 2: 2 cards centered */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+          <div className="bg-bg-card border border-bg-border rounded-xl p-6 hover:border-brand-indigo/50 hover:shadow-lg hover:shadow-brand-indigo/10 transition">
+            <div className="w-10 h-10 rounded-lg bg-brand-indigo/10 border border-brand-indigo/30 flex items-center justify-center mb-4">
+              <BarChart3 className="h-5 w-5 text-brand-indigo" />
+            </div>
+            <h3 className="font-semibold text-lg mb-2">Competitor insights</h3>
+            <p className="text-sm text-muted">Track local competitors by review velocity, ratings, and estimated customer activity. See who&apos;s pulling ahead and why.</p>
+          </div>
+
           <div className="bg-bg-card border border-bg-border rounded-xl p-6 hover:border-brand-indigo/50 hover:shadow-lg hover:shadow-brand-indigo/10 transition">
             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-brand-indigo/20 to-brand-amber/20 border border-brand-indigo/30 flex items-center justify-center mb-4">
               <Sparkles className="h-5 w-5 text-brand-indigo" />
             </div>
-            <h3 className="font-semibold text-lg mb-2">AI insights, not dashboards</h3>
-            <p className="text-sm text-muted">Proactive analysis of what&apos;s working and what&apos;s not. Weekly reports delivered to your inbox.</p>
+            <h3 className="font-semibold text-lg mb-2">AI insights</h3>
+            <p className="text-sm text-muted">Proactive analysis of what&apos;s working and what&apos;s not. Weekly reports delivered to your inbox, benchmarked against peers.</p>
           </div>
         </div>
       </section>
@@ -106,13 +128,15 @@ export default function Home() {
       {/* Private Beta / Contact Sales */}
       <section className="max-w-3xl mx-auto px-6 py-20 text-center space-y-6">
         <div className="text-xs uppercase tracking-widest text-brand-amber">Private beta</div>
-        <h2 className="text-3xl md:text-4xl font-bold">Built for businesses that take local seriously</h2>
-        <p className="text-muted">
-          Local AI is currently onboarding a select group of enterprise customers and agencies. We work closely with each partner to deliver real, measurable business impact — not vanity metrics.
-        </p>
-        <p className="text-muted">
-          If you run a business with multiple locations — or an agency serving such businesses — let&apos;s talk.
-        </p>
+        <h2 className="text-3xl md:text-4xl font-bold">One store or two hundred — we work with you.</h2>
+        <div className="space-y-4 text-muted max-w-2xl mx-auto">
+          <p>
+            Local AI is built for any business with a Google Business Profile. Restaurants. Clinics. Gyms. Salons. Auto service. Retail chains. Hospitals. Whether you have 1 location or 200, we help you make sense of your local performance.
+          </p>
+          <p>
+            We&apos;re in private beta, onboarding partners hand-selected for fit. Let&apos;s see if that&apos;s you.
+          </p>
+        </div>
         <div className="pt-4">
           <ContactSalesTrigger label="Contact Sales" variant="primary" size="lg" />
         </div>
