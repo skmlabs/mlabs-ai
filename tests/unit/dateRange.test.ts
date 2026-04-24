@@ -34,6 +34,31 @@ describe("dateRange", () => {
     expect(normalizeRangeKey("7d")).toBe("7d");
     expect(normalizeRangeKey("28d")).toBe("28d");
     expect(normalizeRangeKey("90d")).toBe("90d");
+    expect(normalizeRangeKey("this_month")).toBe("this_month");
+    expect(normalizeRangeKey("last_month")).toBe("last_month");
+    expect(normalizeRangeKey("last_6_months")).toBe("last_6_months");
     expect(normalizeRangeKey("custom")).toBe("custom");
+  });
+  it("this_month starts on day 1 of current month", () => {
+    const { start } = getDateRange("this_month");
+    expect(start.getUTCDate()).toBe(1);
+    const now = new Date();
+    expect(start.getUTCMonth()).toBe(now.getUTCMonth());
+    expect(start.getUTCFullYear()).toBe(now.getUTCFullYear());
+  });
+  it("last_month spans the previous month", () => {
+    const { start, end } = getDateRange("last_month");
+    const now = new Date();
+    const prevMonth = (now.getUTCMonth() - 1 + 12) % 12;
+    expect(start.getUTCDate()).toBe(1);
+    expect(start.getUTCMonth()).toBe(prevMonth);
+    expect(end.getUTCMonth()).toBe(prevMonth);
+  });
+  it("last_6_months has a start roughly 6 months before today", () => {
+    const { start, end } = getDateRange("last_6_months");
+    expect(end.getTime()).toBeGreaterThan(start.getTime());
+    const diffDays = (end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24);
+    expect(diffDays).toBeGreaterThan(150); // ~6 months
+    expect(diffDays).toBeLessThan(200);
   });
 });

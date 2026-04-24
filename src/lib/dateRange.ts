@@ -1,11 +1,15 @@
-export type DateRangeKey = "7d" | "28d" | "90d" | "custom";
+export type DateRangeKey = "7d" | "28d" | "90d" | "this_month" | "last_month" | "last_6_months" | "custom";
 
 export interface CustomRange { start: string; end: string }
 
 // GMB Performance API has a 24-48h data lag, so a "yesterday" view is always
 // empty or misleading. Accepts legacy values and normalizes them to "7d".
 export function normalizeRangeKey(s: string | null | undefined): DateRangeKey {
-  if (s === "7d" || s === "28d" || s === "90d" || s === "custom") return s;
+  if (
+    s === "7d" || s === "28d" || s === "90d" ||
+    s === "this_month" || s === "last_month" || s === "last_6_months" ||
+    s === "custom"
+  ) return s;
   return "7d";
 }
 
@@ -20,6 +24,25 @@ export function getDateRange(key: DateRangeKey, custom?: CustomRange): { start: 
   end.setUTCHours(0, 0, 0, 0);
   // GMB Perf API lags ~2-3 days, so "end" is yesterday
   end.setUTCDate(end.getUTCDate() - 1);
+
+  if (key === "this_month") {
+    const today = new Date();
+    const start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+    return { start, end, label: humanLabel(key) };
+  }
+  if (key === "last_month") {
+    const today = new Date();
+    const start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 1, 1));
+    // Day 0 of current month is the last day of the previous month
+    const lastMonthEnd = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 0));
+    return { start, end: lastMonthEnd, label: humanLabel(key) };
+  }
+  if (key === "last_6_months") {
+    const today = new Date();
+    const start = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() - 6, today.getUTCDate()));
+    return { start, end, label: humanLabel(key) };
+  }
+
   const start = new Date(end);
   switch (key) {
     case "7d": start.setUTCDate(end.getUTCDate() - 6); break;
@@ -38,6 +61,9 @@ function humanLabel(k: DateRangeKey): string {
     case "7d": return "Last 7 days";
     case "28d": return "Last 28 days";
     case "90d": return "Last 90 days";
+    case "this_month": return "This month";
+    case "last_month": return "Last month";
+    case "last_6_months": return "Last 6 months";
     case "custom": return "Custom range";
   }
 }

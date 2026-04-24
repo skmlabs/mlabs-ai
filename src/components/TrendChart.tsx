@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend,
+  ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend, LabelList,
 } from "recharts";
 import type { TooltipContentProps } from "recharts";
 import { parseISO, format, startOfWeek, startOfMonth } from "date-fns";
@@ -91,11 +91,26 @@ interface Props {
   data: Point[];
   selectedMetric?: TrendMetric;
   onResetMetric?: () => void;
+  cutoffDate?: string;
 }
 
-export function TrendChart({ data, selectedMetric = "all", onResetMetric }: Props) {
+export function TrendChart({ data, selectedMetric = "all", onResetMetric, cutoffDate }: Props) {
   const [gran, setGran] = useState<Granularity>("daily");
+  const [isMobile, setIsMobile] = useState(false);
   const series = useMemo(() => aggregate(data, gran), [data, gran]);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  const showLabels = !isMobile && gran === "daily";
+  const labelFormatter = (v: string | number | boolean | null | undefined): string => {
+    const n = typeof v === "number" ? v : Number(v ?? 0);
+    return Number.isFinite(n) && n > 0 ? n.toLocaleString() : "";
+  };
 
   if (data.length === 0) {
     return (
@@ -113,7 +128,12 @@ export function TrendChart({ data, selectedMetric = "all", onResetMetric }: Prop
     <div className="bg-bg-card border border-bg-border rounded-xl p-4">
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
         <div className="flex items-center gap-3">
-          <div className="text-sm font-medium">{METRIC_TITLE[selectedMetric]}</div>
+          <div>
+            <div className="text-sm font-medium">{METRIC_TITLE[selectedMetric]}</div>
+            {cutoffDate ? (
+              <p className="text-[11px] text-muted mt-0.5">Showing data through {cutoffDate}. Google&apos;s API has a 24-48hr lag.</p>
+            ) : null}
+          </div>
           {selectedMetric !== "all" && onResetMetric ? (
             <button
               onClick={onResetMetric}
@@ -163,13 +183,25 @@ export function TrendChart({ data, selectedMetric = "all", onResetMetric }: Prop
               formatter={v => <span style={{ color: "#8a8fa0", textTransform: "capitalize" }}>{v}</span>}
             />
             {showCalls ? (
-              <Line type="monotone" dataKey="calls" name="Calls" stroke={COLORS.calls} strokeWidth={2} dot={false} activeDot={{ r: 5 }} />
+              <Line type="monotone" dataKey="calls" name="Calls" stroke={COLORS.calls} strokeWidth={2} dot={false} activeDot={{ r: 5 }}>
+                {showLabels ? (
+                  <LabelList dataKey="calls" position="top" fontSize={10} fill="#e5e7eb" formatter={labelFormatter} />
+                ) : null}
+              </Line>
             ) : null}
             {showDirections ? (
-              <Line type="monotone" dataKey="directions" name="Directions" stroke={COLORS.directions} strokeWidth={2} dot={false} activeDot={{ r: 5 }} />
+              <Line type="monotone" dataKey="directions" name="Directions" stroke={COLORS.directions} strokeWidth={2} dot={false} activeDot={{ r: 5 }}>
+                {showLabels ? (
+                  <LabelList dataKey="directions" position="top" fontSize={10} fill="#e5e7eb" formatter={labelFormatter} />
+                ) : null}
+              </Line>
             ) : null}
             {showWebsite ? (
-              <Line type="monotone" dataKey="website" name="Website" stroke={COLORS.website} strokeWidth={2} dot={false} activeDot={{ r: 5 }} />
+              <Line type="monotone" dataKey="website" name="Website" stroke={COLORS.website} strokeWidth={2} dot={false} activeDot={{ r: 5 }}>
+                {showLabels ? (
+                  <LabelList dataKey="website" position="top" fontSize={10} fill="#e5e7eb" formatter={labelFormatter} />
+                ) : null}
+              </Line>
             ) : null}
           </LineChart>
         </ResponsiveContainer>

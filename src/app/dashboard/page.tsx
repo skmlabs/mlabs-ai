@@ -147,6 +147,29 @@ function OverviewInner() {
     );
   }
 
+  // GMB Performance API has a 24-48hr lag; the last 2 days always read zero
+  // and produce a misleading "drop to zero" at the right edge of the chart.
+  const cutoff = new Date();
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - 2);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  const filteredByDate = data.byDate.filter(p => p.date <= cutoffStr);
+
+  async function handleExportDailyBreakdown() {
+    if (!data) return;
+    await exportToExcel(
+      filteredByDate,
+      [
+        { key: "date", label: "Date" },
+        { key: "calls", label: "Calls" },
+        { key: "directions", label: "Directions" },
+        { key: "website", label: "Website Clicks" },
+      ],
+      `daily-breakdown-${new Date().toISOString().slice(0, 10)}`,
+      "Daily Breakdown",
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -202,9 +225,10 @@ function OverviewInner() {
       </div>
 
       <TrendChart
-        data={data.byDate}
+        data={filteredByDate}
         selectedMetric={selectedMetric}
         onResetMetric={() => setSelectedMetric("all")}
+        cutoffDate={cutoffStr}
       />
 
       <div className="grid md:grid-cols-2 gap-4">
@@ -272,8 +296,13 @@ function OverviewInner() {
       </div>
 
       <div className="bg-bg-card border border-bg-border rounded-xl overflow-hidden">
-        <div className="px-4 py-3 border-b border-bg-border text-sm font-medium">Daily breakdown</div>
-        {data.byDate.length === 0 ? (
+        <div className="px-4 py-3 border-b border-bg-border text-sm font-medium flex items-center justify-between gap-2">
+          <span>Daily breakdown</span>
+          {filteredByDate.length > 0 ? (
+            <ExportButton onClick={handleExportDailyBreakdown} label="Export" />
+          ) : null}
+        </div>
+        {filteredByDate.length === 0 ? (
           <div className="p-4 text-muted text-sm">No daily data for this range.</div>
         ) : (
           <div className="max-h-[320px] overflow-auto">
@@ -287,7 +316,7 @@ function OverviewInner() {
                 </tr>
               </thead>
               <tbody>
-                {data.byDate.map(d => (
+                {filteredByDate.map(d => (
                   <tr key={d.date} className="border-t border-bg-border">
                     <td className="px-4 py-2">{d.date}</td>
                     <td className="px-4 py-2 text-right">{fmt(d.calls)}</td>

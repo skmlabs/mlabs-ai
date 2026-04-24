@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import { X, Loader2, CheckCircle2 } from "lucide-react";
 import PhoneInput from "react-phone-number-input";
@@ -13,12 +14,15 @@ interface Props {
 type Status = "idle" | "submitting" | "success" | "error";
 
 export function ContactSalesModal({ open, onClose }: Props) {
+  const [mounted, setMounted] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState<string | undefined>();
   const [company, setCompany] = useState("");
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => { setMounted(true); }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -35,7 +39,7 @@ export function ContactSalesModal({ open, onClose }: Props) {
     return () => window.removeEventListener("keydown", handler);
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -75,8 +79,8 @@ export function ContactSalesModal({ open, onClose }: Props) {
     }, 300);
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={handleClose}>
+  const modalContent = (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={handleClose}>
       <div className="relative w-full max-w-md bg-bg-card border border-bg-border rounded-2xl shadow-2xl" onClick={e => e.stopPropagation()}>
         <button onClick={handleClose} className="absolute top-4 right-4 text-muted hover:text-white" aria-label="Close">
           <X className="h-5 w-5" />
@@ -158,4 +162,6 @@ export function ContactSalesModal({ open, onClose }: Props) {
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

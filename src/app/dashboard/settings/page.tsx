@@ -115,7 +115,7 @@ export default function SettingsPage() {
                 <div className="flex flex-col items-end gap-2">
                   <div className="flex gap-2">
                     <button onClick={() => onSync(a.id)} disabled={syncingAccountId === a.id} className="text-xs border border-bg-border hover:border-brand-indigo rounded-md px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50">
-                      {syncingAccountId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Auto-sync (needs API approval)
+                      {syncingAccountId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Auto-sync
                     </button>
                     <button onClick={() => onDisconnect(a.id)} className="text-xs border border-red-500/30 hover:bg-red-500/10 text-red-300 rounded-md px-3 py-1.5 flex items-center gap-1.5">
                       <Unplug className="h-3.5 w-3.5" /> Disconnect
