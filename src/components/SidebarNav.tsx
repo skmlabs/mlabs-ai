@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 
 const LINKS = [
   { href: "/dashboard", label: "Overview" },
-  { href: "/dashboard/locations", label: "Locations" },
+  { href: "/dashboard/locations", label: "My Locations" },
   { href: "/dashboard/reviews", label: "Reviews" },
   { href: "/dashboard/settings", label: "Settings" },
 ];
@@ -14,7 +14,7 @@ export function SidebarNav() {
   const pathname = usePathname();
   const active = (href: string) => href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
   return (
-    <nav className="mt-6 flex-1 space-y-1 text-sm">
+    <nav className="mt-6 space-y-1 text-sm">
       {LINKS.map(l => (
         <Link
           key={l.href}

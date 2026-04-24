@@ -6,7 +6,7 @@ import { DateRangePills } from "@/components/DateRangePills";
 import { FilterPill } from "@/components/FilterPill";
 import { SortableHeader, type SortDir } from "@/components/SortableHeader";
 import { exportToExcel } from "@/lib/excel";
-import type { DateRangeKey } from "@/lib/dateRange";
+import { normalizeRangeKey, type DateRangeKey } from "@/lib/dateRange";
 import { Loader2, Download, MapPin, Star } from "lucide-react";
 
 type Row = {
@@ -43,7 +43,7 @@ function LocationsInner() {
   const search = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const range = (search.get("range") ?? "28d") as DateRangeKey;
+  const range = normalizeRangeKey(search.get("range"));
   const locationId = search.get("locationId");
   const customStart = search.get("start") ?? undefined;
   const customEnd = search.get("end") ?? undefined;
@@ -136,7 +136,7 @@ function LocationsInner() {
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Locations</h1>
+          <h1 className="text-2xl font-bold">My Locations</h1>
           <div className="text-xs text-muted mt-1">{meta ? `${meta.label} · ${meta.start} to ${meta.end}` : ""}</div>
         </div>
         <div className="flex items-center gap-2">
@@ -166,7 +166,7 @@ function LocationsInner() {
                   <SortableHeader label="Directions" align="right" active={sortKey === "directions"} dir={sortDir} onClick={() => toggleSort("directions")} />
                   <SortableHeader label="Website" align="right" active={sortKey === "website_clicks"} dir={sortDir} onClick={() => toggleSort("website_clicks")} />
                   <SortableHeader label="Avg rating" align="right" active={sortKey === "avg_rating"} dir={sortDir} onClick={() => toggleSort("avg_rating")} />
-                  <SortableHeader label="Reviews" align="right" active={sortKey === "total_reviews"} dir={sortDir} onClick={() => toggleSort("total_reviews")} />
+                  <SortableHeader label="Total reviews" align="right" active={sortKey === "total_reviews"} dir={sortDir} onClick={() => toggleSort("total_reviews")} />
                 </tr>
               </thead>
               <tbody>

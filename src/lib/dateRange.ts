@@ -1,6 +1,13 @@
-export type DateRangeKey = "yesterday" | "7d" | "28d" | "90d" | "custom";
+export type DateRangeKey = "7d" | "28d" | "90d" | "custom";
 
 export interface CustomRange { start: string; end: string }
+
+// GMB Performance API has a 24-48h data lag, so a "yesterday" view is always
+// empty or misleading. Accepts legacy values and normalizes them to "7d".
+export function normalizeRangeKey(s: string | null | undefined): DateRangeKey {
+  if (s === "7d" || s === "28d" || s === "90d" || s === "custom") return s;
+  return "7d";
+}
 
 export function getDateRange(key: DateRangeKey, custom?: CustomRange): { start: Date; end: Date; label: string } {
   if (key === "custom" && custom) {
@@ -15,7 +22,6 @@ export function getDateRange(key: DateRangeKey, custom?: CustomRange): { start: 
   end.setUTCDate(end.getUTCDate() - 1);
   const start = new Date(end);
   switch (key) {
-    case "yesterday": start.setUTCDate(end.getUTCDate()); break;
     case "7d": start.setUTCDate(end.getUTCDate() - 6); break;
     case "28d": start.setUTCDate(end.getUTCDate() - 27); break;
     case "90d": start.setUTCDate(end.getUTCDate() - 89); break;
@@ -29,7 +35,6 @@ export function getDateRange(key: DateRangeKey, custom?: CustomRange): { start: 
 
 function humanLabel(k: DateRangeKey): string {
   switch (k) {
-    case "yesterday": return "Yesterday";
     case "7d": return "Last 7 days";
     case "28d": return "Last 28 days";
     case "90d": return "Last 90 days";

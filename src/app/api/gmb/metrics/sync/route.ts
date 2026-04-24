@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { fetchDailyMetrics, setMetricFetchState, upsertDailyMetrics } from "@/lib/gmb/performance";
-import { getDateRange, isValidYMD, type DateRangeKey } from "@/lib/dateRange";
+import { getDateRange, isValidYMD, normalizeRangeKey } from "@/lib/dateRange";
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
-  const rangeKey = (searchParams.get("range") ?? "28d") as DateRangeKey;
+  const rangeKey = normalizeRangeKey(searchParams.get("range"));
   const customStart = searchParams.get("start");
   const customEnd = searchParams.get("end");
   const custom = rangeKey === "custom" && isValidYMD(customStart) && isValidYMD(customEnd)

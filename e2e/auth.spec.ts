@@ -10,6 +10,6 @@ test("unauthenticated user is redirected from /dashboard to /login", async ({ pa
 test("landing page still renders publicly", async ({ page }) => {
   await page.goto("/");
   await expect(
-    page.getByRole("heading", { name: /marketing intelligence for/i })
+    page.getByRole("heading", { name: /know your google presence/i })
   ).toBeVisible();
 });

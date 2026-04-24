@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { getDateRange, toYMD, isValidYMD, type DateRangeKey } from "@/lib/dateRange";
+import { getDateRange, toYMD, isValidYMD, normalizeRangeKey } from "@/lib/dateRange";
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
-  const rangeKey = (searchParams.get("range") ?? "28d") as DateRangeKey;
+  const rangeKey = normalizeRangeKey(searchParams.get("range"));
   const customStart = searchParams.get("start");
   const customEnd = searchParams.get("end");
   const custom = rangeKey === "custom" && isValidYMD(customStart) && isValidYMD(customEnd)
@@ -17,11 +17,14 @@ export async function GET(request: Request) {
   const { start, end, label } = getDateRange(rangeKey, custom);
   const startYmd = toYMD(start), endYmd = toYMD(end);
 
+  // Filter out manual entries — My Locations shows only GMB-synced locations.
+  // Manual entries are flagged with gmb_account_id = "manual" (see /api/gmb/locations/manual).
   const { data: locations, error: locErr } = await supabase
     .from("locations")
     .select("id, title, address, place_id, is_active, primary_phone, website_uri")
     .eq("user_id", user.id)
-    .eq("is_active", true);
+    .eq("is_active", true)
+    .neq("gmb_account_id", "manual");
   if (locErr) return NextResponse.json({ error: locErr.message }, { status: 500 });
   const locs = locations ?? [];
   if (locs.length === 0) return NextResponse.json({ rows: [], range: { key: rangeKey, label, start: startYmd, end: endYmd } });

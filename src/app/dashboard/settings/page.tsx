@@ -17,9 +17,6 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [syncingAccountId, setSyncingAccountId] = useState<string | null>(null);
   const [busyLocationId, setBusyLocationId] = useState<string | null>(null);
-  const [manualForm, setManualForm] = useState<{ title: string; placeId: string; address: string; phone: string; website: string; locationResourceName: string }>({ title: "", placeId: "", address: "", phone: "", website: "", locationResourceName: "" });
-  const [manualBusy, setManualBusy] = useState(false);
-  const [showManualForm, setShowManualForm] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ kind: "success" | "error"; msg: string } | null>(
     connected ? { kind: "success", msg: "Google Business Profile connected." }
       : gmbError ? { kind: "error", msg: `Connection failed: ${gmbError}` } : null
@@ -68,31 +65,6 @@ export default function SettingsPage() {
     });
     if (res.ok) setLocations(prev => prev.map(l => l.id === locationId ? { ...l, is_active: next } : l));
     setBusyLocationId(null);
-  }
-
-  async function onAddManual(connectedAccountId: string) {
-    if (!manualForm.title.trim() || !manualForm.placeId.trim()) {
-      setBanner({ kind: "error", msg: "Business name and Place ID are required." });
-      return;
-    }
-    setManualBusy(true);
-    try {
-      const res = await fetch("/api/gmb/locations/manual", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...manualForm, connectedAccountId }),
-      });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error ?? "add failed");
-      setBanner({ kind: "success", msg: `Added "${manualForm.title}".` });
-      setManualForm({ title: "", placeId: "", address: "", phone: "", website: "", locationResourceName: "" });
-      setShowManualForm(null);
-      await load();
-    } catch (e) {
-      setBanner({ kind: "error", msg: e instanceof Error ? e.message : "Add failed" });
-    } finally {
-      setManualBusy(false);
-    }
   }
 
   async function onDeleteLocation(locationId: string, title: string) {
@@ -145,29 +117,10 @@ export default function SettingsPage() {
                     <button onClick={() => onSync(a.id)} disabled={syncingAccountId === a.id} className="text-xs border border-bg-border hover:border-brand-indigo rounded-md px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50">
                       {syncingAccountId === a.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Auto-sync (needs API approval)
                     </button>
-                    <button onClick={() => setShowManualForm(showManualForm === a.id ? null : a.id)} className="text-xs border border-brand-indigo/40 hover:bg-brand-indigo/10 text-brand-indigo rounded-md px-3 py-1.5 flex items-center gap-1.5">
-                      <MapPin className="h-3.5 w-3.5" /> {showManualForm === a.id ? "Cancel" : "Add location manually"}
-                    </button>
                     <button onClick={() => onDisconnect(a.id)} className="text-xs border border-red-500/30 hover:bg-red-500/10 text-red-300 rounded-md px-3 py-1.5 flex items-center gap-1.5">
                       <Unplug className="h-3.5 w-3.5" /> Disconnect
                     </button>
                   </div>
-                  {showManualForm === a.id ? (
-                    <div className="w-full mt-3 p-4 bg-bg border border-bg-border rounded-lg space-y-2">
-                      <p className="text-xs text-muted">Find your Place ID at: <a className="text-brand-indigo hover:underline" target="_blank" rel="noreferrer" href="https://developers.google.com/maps/documentation/javascript/examples/places-placeid-finder">Google Place ID Finder</a></p>
-                      <input className="w-full bg-bg-card border border-bg-border rounded px-3 py-1.5 text-xs" placeholder="Business name *" value={manualForm.title} onChange={e => setManualForm(f => ({ ...f, title: e.target.value }))} />
-                      <input className="w-full bg-bg-card border border-bg-border rounded px-3 py-1.5 text-xs" placeholder="Place ID (e.g. ChIJ...) *" value={manualForm.placeId} onChange={e => setManualForm(f => ({ ...f, placeId: e.target.value }))} />
-                      <input className="w-full bg-bg-card border border-bg-border rounded px-3 py-1.5 text-xs" placeholder="Address (optional)" value={manualForm.address} onChange={e => setManualForm(f => ({ ...f, address: e.target.value }))} />
-                      <div className="grid grid-cols-2 gap-2">
-                        <input className="bg-bg-card border border-bg-border rounded px-3 py-1.5 text-xs" placeholder="Phone (optional)" value={manualForm.phone} onChange={e => setManualForm(f => ({ ...f, phone: e.target.value }))} />
-                        <input className="bg-bg-card border border-bg-border rounded px-3 py-1.5 text-xs" placeholder="Website (optional)" value={manualForm.website} onChange={e => setManualForm(f => ({ ...f, website: e.target.value }))} />
-                      </div>
-                      <input className="w-full bg-bg-card border border-bg-border rounded px-3 py-1.5 text-xs" placeholder="Location resource name (optional, format: locations/12345...)" value={manualForm.locationResourceName} onChange={e => setManualForm(f => ({ ...f, locationResourceName: e.target.value }))} />
-                      <button onClick={() => onAddManual(a.id)} disabled={manualBusy} className="bg-brand-indigo hover:bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-md disabled:opacity-50">
-                        {manualBusy ? "Adding…" : "Add location"}
-                      </button>
-                    </div>
-                  ) : null}
                 </div>
               </div>
             ))}
@@ -179,7 +132,7 @@ export default function SettingsPage() {
       <section className="mt-10">
         <h2 className="text-lg font-semibold mb-3">Your locations</h2>
         {loading ? null : locations.length === 0 ? (
-          <p className="text-sm text-muted">No locations yet. Click &quot;Sync locations&quot; above after connecting an account.</p>
+          <p className="text-sm text-muted">No locations yet. Click &quot;Auto-sync&quot; above after connecting an account.</p>
         ) : (
           <div className="bg-bg-card border border-bg-border rounded-xl overflow-hidden">
             <table className="w-full text-sm">

@@ -17,7 +17,7 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-3">
             <Link href="/login" className="text-sm text-muted hover:text-white transition">Sign in</Link>
-            <ContactSalesTrigger label="Contact Sales" variant="primary" size="sm" />
+            <ContactSalesTrigger label="Talk to an expert" variant="primary" size="sm" />
           </div>
         </div>
       </header>
@@ -138,7 +138,7 @@ export default function Home() {
           </p>
         </div>
         <div className="pt-4">
-          <ContactSalesTrigger label="Contact Sales" variant="primary" size="lg" />
+          <ContactSalesTrigger label="Talk to an expert" variant="primary" size="lg" />
         </div>
       </section>
 
@@ -154,7 +154,7 @@ export default function Home() {
             { q: "Which Google Business Profile features work?", a: "Read performance data (calls, directions, website clicks), read and reply to reviews, benchmark against competitors. Local AI is read-first — we never modify your Business Profile without explicit action like replying to a review." },
             { q: "Do I need Google Ads or Meta accounts?", a: "No. Local AI works with Google Business Profile alone. For multi-channel marketing analytics (Meta Ads, Google Ads, GA4, attribution), check out MLabs Digital's enterprise offering." },
             { q: "Is my data secure?", a: "Yes. OAuth tokens are encrypted at rest with AES-256-GCM. Your data is isolated per account using Row Level Security at the database layer. We never share or sell your data. You can disconnect anytime." },
-            { q: "How do I get started?", a: "We're onboarding customers through direct conversation. Click 'Contact Sales' above and we'll schedule a quick demo and get you set up within 48 hours." },
+            { q: "How do I get started?", a: "We're onboarding customers through direct conversation. Click 'Talk to an expert' above and we'll get back to you within 24 hours." },
           ].map((item, i) => (
             <details key={i} className="group bg-bg-card border border-bg-border rounded-lg">
               <summary className="flex items-center justify-between cursor-pointer px-5 py-4 font-medium list-none">
@@ -182,7 +182,7 @@ export default function Home() {
             </div>
             <div className="flex flex-wrap gap-x-6 gap-y-2 text-xs text-muted">
               <a href="https://mlabsdigital.org/about-us/" target="_blank" rel="noopener noreferrer" className="hover:text-white">About</a>
-              <ContactSalesTrigger label="Contact Sales" variant="link" size="sm" />
+              <ContactSalesTrigger label="Talk to an expert" variant="link" size="sm" />
               <a href="https://mlabsdigital.org/privacy-policy/" target="_blank" rel="noopener noreferrer" className="hover:text-white">Privacy</a>
               <a href="https://mlabsdigital.org/terms/" target="_blank" rel="noopener noreferrer" className="hover:text-white">Terms</a>
             </div>

@@ -5,7 +5,6 @@ import { CustomDateRangePicker } from "./CustomDateRangePicker";
 import { Calendar } from "lucide-react";
 
 const OPTS: { key: DateRangeKey; label: string }[] = [
-  { key: "yesterday", label: "Yesterday" },
   { key: "7d", label: "7 days" },
   { key: "28d", label: "28 days" },
   { key: "90d", label: "90 days" },

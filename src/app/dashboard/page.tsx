@@ -6,7 +6,7 @@ import { DateRangePills } from "@/components/DateRangePills";
 import { KpiCard } from "@/components/KpiCard";
 import { TrendChart } from "@/components/TrendChart";
 import { FilterPill } from "@/components/FilterPill";
-import type { DateRangeKey } from "@/lib/dateRange";
+import { normalizeRangeKey, type DateRangeKey } from "@/lib/dateRange";
 import { Loader2, RefreshCw, MapPin, Star } from "lucide-react";
 
 type OverviewResponse = {
@@ -36,7 +36,7 @@ function OverviewInner() {
   const search = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const range = (search.get("range") ?? "28d") as DateRangeKey;
+  const range = normalizeRangeKey(search.get("range"));
   const locationId = search.get("locationId");
   const customStart = search.get("start") ?? undefined;
   const customEnd = search.get("end") ?? undefined;

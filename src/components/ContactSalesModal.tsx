@@ -86,13 +86,13 @@ export function ContactSalesModal({ open, onClose }: Props) {
           <div className="p-8 text-center space-y-4">
             <CheckCircle2 className="h-12 w-12 text-green-400 mx-auto" />
             <h2 className="text-xl font-bold">Thanks — we&apos;ll be in touch.</h2>
-            <p className="text-sm text-muted">We&apos;ll reach out within 24 hours to schedule your demo.</p>
+            <p className="text-sm text-muted">We&apos;ll reach out within 24 hours.</p>
             <button onClick={handleClose} className="mt-2 text-sm text-brand-indigo hover:underline">Close</button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="p-6 space-y-4">
             <div>
-              <div className="text-xs uppercase tracking-widest text-brand-indigo mb-1">Contact Sales</div>
+              <div className="text-xs uppercase tracking-widest text-brand-indigo mb-1">Talk to an expert</div>
               <h2 className="text-xl font-bold">Let&apos;s talk.</h2>
               <p className="text-xs text-muted mt-1">Tell us a bit about you — we&apos;ll get back within 24 hours.</p>
             </div>

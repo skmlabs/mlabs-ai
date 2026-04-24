@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-import { getDateRange, toYMD, isValidYMD, type DateRangeKey } from "@/lib/dateRange";
+import { getDateRange, toYMD, isValidYMD, normalizeRangeKey } from "@/lib/dateRange";
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const { searchParams } = new URL(request.url);
-  const rangeKey = (searchParams.get("range") ?? "28d") as DateRangeKey;
+  const rangeKey = normalizeRangeKey(searchParams.get("range"));
   const locationFilter = searchParams.get("locationId");
   const customStart = searchParams.get("start");
   const customEnd = searchParams.get("end");
@@ -18,8 +18,9 @@ export async function GET(request: Request) {
   const { start, end, label } = getDateRange(rangeKey, custom);
   const startYmd = toYMD(start), endYmd = toYMD(end);
 
-  // Locations
-  let locQuery = supabase.from("locations").select("id, title, address, place_id, is_active").eq("user_id", user.id).eq("is_active", true);
+  // Locations — excludes manual entries (gmb_account_id = "manual"); those
+  // surface in Settings only, not in Overview metrics.
+  let locQuery = supabase.from("locations").select("id, title, address, place_id, is_active").eq("user_id", user.id).eq("is_active", true).neq("gmb_account_id", "manual");
   if (locationFilter) locQuery = locQuery.eq("id", locationFilter);
   const { data: locations, error: locErr } = await locQuery;
   if (locErr) return NextResponse.json({ error: locErr.message }, { status: 500 });

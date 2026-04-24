@@ -11,7 +11,8 @@ export async function GET(request: Request) {
   const minRating = searchParams.get("minRating");
   const maxRating = searchParams.get("maxRating");
 
-  let locQuery = supabase.from("locations").select("id, title, address, place_id, is_active").eq("user_id", user.id).eq("is_active", true);
+  // Exclude manual entries — Reviews tab shows only GMB-synced locations.
+  let locQuery = supabase.from("locations").select("id, title, address, place_id, is_active").eq("user_id", user.id).eq("is_active", true).neq("gmb_account_id", "manual");
   if (locationFilter) locQuery = locQuery.eq("id", locationFilter);
   const { data: locations } = await locQuery;
   const locs = locations ?? [];
