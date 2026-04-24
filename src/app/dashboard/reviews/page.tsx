@@ -3,7 +3,17 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { FilterPill } from "@/components/FilterPill";
+import { ExportButton } from "@/components/ExportButton";
+import { exportToExcel } from "@/lib/exportExcel";
 import { Loader2, Star, MapPin, ChevronDown, ChevronUp } from "lucide-react";
+
+type FlatReview = {
+  location_name: string;
+  reviewer_name: string;
+  rating: number | "";
+  text: string;
+  publish_time: string;
+};
 
 type Group = {
   location_id: string;
@@ -73,6 +83,36 @@ function ReviewsInner() {
     setExpanded(e => ({ ...e, [locId]: !e[locId] }));
   }
 
+  async function onExport() {
+    const flat: FlatReview[] = [];
+    for (const g of groups) {
+      for (const r of g.reviews) {
+        flat.push({
+          location_name: g.title,
+          reviewer_name: r.author_name ?? "Anonymous",
+          rating: typeof r.rating === "number" ? r.rating : "",
+          text: r.text ?? "",
+          publish_time: r.publish_time ? new Date(r.publish_time).toISOString().slice(0, 10) : "",
+        });
+      }
+    }
+    const datePart = new Date().toISOString().slice(0, 10);
+    await exportToExcel(
+      flat,
+      [
+        { key: "location_name", label: "Location" },
+        { key: "reviewer_name", label: "Reviewer" },
+        { key: "rating", label: "Rating" },
+        { key: "text", label: "Review" },
+        { key: "publish_time", label: "Published" },
+      ],
+      `reviews-${datePart}`,
+      "Reviews",
+    );
+  }
+
+  const totalReviewsShown = groups.reduce((sum, g) => sum + g.reviews.length, 0);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -80,15 +120,18 @@ function ReviewsInner() {
           <h1 className="text-2xl font-bold">Reviews</h1>
           <div className="text-xs text-muted mt-1">Grouped by location, most recent first.</div>
         </div>
-        <div className="inline-flex bg-bg-card border border-bg-border rounded-lg p-1 text-xs">
-          {STAR_FILTERS.map(f => {
-            const active = (f.min === minRating) && (f.max === maxRating);
-            return (
-              <button key={f.label} onClick={() => setStarFilter(f.min, f.max)} className={`px-3 py-1.5 rounded-md transition ${active ? "bg-brand-indigo text-white" : "text-muted hover:text-white"}`}>
-                {f.label}
-              </button>
-            );
-          })}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="inline-flex bg-bg-card border border-bg-border rounded-lg p-1 text-xs">
+            {STAR_FILTERS.map(f => {
+              const active = (f.min === minRating) && (f.max === maxRating);
+              return (
+                <button key={f.label} onClick={() => setStarFilter(f.min, f.max)} className={`px-3 py-1.5 rounded-md transition ${active ? "bg-brand-indigo text-white" : "text-muted hover:text-white"}`}>
+                  {f.label}
+                </button>
+              );
+            })}
+          </div>
+          <ExportButton onClick={onExport} label="Export to Excel" disabled={totalReviewsShown === 0} />
         </div>
       </div>
 

@@ -5,9 +5,10 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { DateRangePills } from "@/components/DateRangePills";
 import { FilterPill } from "@/components/FilterPill";
 import { SortableHeader, type SortDir } from "@/components/SortableHeader";
-import { exportToExcel } from "@/lib/excel";
+import { ExportButton } from "@/components/ExportButton";
+import { exportToExcel } from "@/lib/exportExcel";
 import { normalizeRangeKey, type DateRangeKey } from "@/lib/dateRange";
-import { Loader2, Download, MapPin, Star } from "lucide-react";
+import { Loader2, MapPin, Star } from "lucide-react";
 
 type Row = {
   id: string;
@@ -116,20 +117,24 @@ function LocationsInner() {
   }
 
   async function onExport() {
-    const payload = visibleRows.map(r => ({
-      Location: r.title,
-      Address: r.address ?? "",
-      Phone: r.phone ?? "",
-      Website: r.website ?? "",
-      Calls: r.calls,
-      Directions: r.directions,
-      "Website clicks": r.website_clicks,
-      "Avg rating": r.avg_rating ?? "",
-      "Total reviews": r.total_reviews,
-      "Metrics status": r.metrics_status,
-    }));
-    const fname = `mlabs-ai-locations-${meta?.start ?? ""}-to-${meta?.end ?? ""}.xlsx`;
-   await exportToExcel(payload, fname, "Locations");
+    const datePart = meta ? `${meta.start}-to-${meta.end}` : new Date().toISOString().slice(0, 10);
+    await exportToExcel(
+      visibleRows,
+      [
+        { key: "title", label: "Location" },
+        { key: "address", label: "Address", format: v => typeof v === "string" ? v : "" },
+        { key: "phone", label: "Phone", format: v => typeof v === "string" ? v : "" },
+        { key: "website", label: "Website", format: v => typeof v === "string" ? v : "" },
+        { key: "calls", label: "Calls" },
+        { key: "directions", label: "Directions" },
+        { key: "website_clicks", label: "Website Clicks" },
+        { key: "avg_rating", label: "Avg Rating", format: v => typeof v === "number" ? v.toFixed(1) : "-" },
+        { key: "total_reviews", label: "Total Reviews" },
+        { key: "metrics_status", label: "Metrics Status", format: v => typeof v === "string" ? v : "" },
+      ],
+      `my-locations-${datePart}`,
+      "My Locations",
+    );
   }
 
   return (
@@ -139,11 +144,9 @@ function LocationsInner() {
           <h1 className="text-2xl font-bold">My Locations</h1>
           <div className="text-xs text-muted mt-1">{meta ? `${meta.label} · ${meta.start} to ${meta.end}` : ""}</div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <DateRangePills value={range} onChange={setRange} onCustomApply={applyCustomRange} customStart={customStart} customEnd={customEnd} />
-          <button onClick={onExport} disabled={rows.length === 0} className="text-xs border border-bg-border hover:border-brand-indigo rounded-md px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50">
-            <Download className="h-3.5 w-3.5" /> Export Excel
-          </button>
+          <ExportButton onClick={onExport} label="Export to Excel" disabled={rows.length === 0} />
         </div>
       </div>
 
@@ -157,7 +160,7 @@ function LocationsInner() {
         </div>
       ) : (
         <div className="bg-bg-card border border-bg-border rounded-xl overflow-hidden">
-          <div className="overflow-auto">
+          <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[900px]">
               <thead className="bg-bg">
                 <tr>

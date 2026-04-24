@@ -4,8 +4,10 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { DateRangePills } from "@/components/DateRangePills";
 import { KpiCard } from "@/components/KpiCard";
-import { TrendChart } from "@/components/TrendChart";
+import { TrendChart, type TrendMetric } from "@/components/TrendChart";
 import { FilterPill } from "@/components/FilterPill";
+import { ExportButton } from "@/components/ExportButton";
+import { exportToExcel } from "@/lib/exportExcel";
 import { normalizeRangeKey, type DateRangeKey } from "@/lib/dateRange";
 import { Loader2, RefreshCw, MapPin, Star } from "lucide-react";
 
@@ -46,6 +48,7 @@ function OverviewInner() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState<"metrics" | "reviews" | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
+  const [selectedMetric, setSelectedMetric] = useState<TrendMetric>("all");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -125,6 +128,25 @@ function OverviewInner() {
   }
   if (!data) return <div className="text-red-400 text-sm">Failed to load.</div>;
 
+  function toggleMetric(m: Exclude<TrendMetric, "all">) {
+    setSelectedMetric(prev => prev === m ? "all" : m);
+  }
+
+  async function handleExportTopLocations() {
+    if (!data) return;
+    await exportToExcel(
+      data.topLocations,
+      [
+        { key: "title", label: "Location" },
+        { key: "calls", label: "Calls" },
+        { key: "directions", label: "Directions" },
+        { key: "website", label: "Website Clicks" },
+      ],
+      `top-locations-${new Date().toISOString().slice(0, 10)}`,
+      "Top Locations",
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -132,7 +154,7 @@ function OverviewInner() {
           <h1 className="text-2xl font-bold">Overview</h1>
           <div className="text-xs text-muted mt-1">{data.range.label} · {data.range.start} to {data.range.end}</div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <DateRangePills value={range} onChange={setRange} onCustomApply={applyCustomRange} customStart={customStart} customEnd={customEnd} />
           <button onClick={syncMetrics} disabled={syncing !== null} className="text-xs border border-bg-border hover:border-brand-indigo rounded-md px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50">
             {syncing === "metrics" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Sync metrics
@@ -147,49 +169,85 @@ function OverviewInner() {
 
       {banner ? <div className="bg-bg-card border border-bg-border rounded-lg px-4 py-3 text-sm text-muted">{banner}</div> : null}
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard label="Total calls" value={fmt(data.totals.calls)} />
-        <KpiCard label="Direction requests" value={fmt(data.totals.directions)} />
-        <KpiCard label="Website clicks" value={fmt(data.totals.website)} />
-        <KpiCard label={locationId ? "Filtered" : "Active locations"} value={data.totals.totalLocations} sub={data.reviews.avgRating != null ? `Avg rating ${data.reviews.avgRating.toFixed(1)} ★ · ${fmt(data.reviews.totalReviews)} reviews` : undefined} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard
+          label="Total calls"
+          value={fmt(data.totals.calls)}
+          accent="indigo"
+          onClick={() => toggleMetric("calls")}
+          selected={selectedMetric === "calls"}
+          dimmed={selectedMetric !== "all" && selectedMetric !== "calls"}
+        />
+        <KpiCard
+          label="Direction requests"
+          value={fmt(data.totals.directions)}
+          accent="amber"
+          onClick={() => toggleMetric("directions")}
+          selected={selectedMetric === "directions"}
+          dimmed={selectedMetric !== "all" && selectedMetric !== "directions"}
+        />
+        <KpiCard
+          label="Website clicks"
+          value={fmt(data.totals.website)}
+          accent="emerald"
+          onClick={() => toggleMetric("website")}
+          selected={selectedMetric === "website"}
+          dimmed={selectedMetric !== "all" && selectedMetric !== "website"}
+        />
+        <KpiCard
+          label={locationId ? "Filtered" : "Active locations"}
+          value={data.totals.totalLocations}
+          sub={data.reviews.avgRating != null ? `Avg rating ${data.reviews.avgRating.toFixed(1)} ★ · ${fmt(data.reviews.totalReviews)} reviews` : undefined}
+        />
       </div>
 
-      <TrendChart data={data.byDate} />
+      <TrendChart
+        data={data.byDate}
+        selectedMetric={selectedMetric}
+        onResetMetric={() => setSelectedMetric("all")}
+      />
 
       <div className="grid md:grid-cols-2 gap-4">
         <div className="bg-bg-card border border-bg-border rounded-xl overflow-hidden">
-          <div className="px-4 py-3 border-b border-bg-border text-sm font-medium">Top locations</div>
+          <div className="px-4 py-3 border-b border-bg-border text-sm font-medium flex items-center justify-between gap-2">
+            <span>Top locations</span>
+            {data.topLocations.length > 0 ? (
+              <ExportButton onClick={handleExportTopLocations} label="Export" />
+            ) : null}
+          </div>
           {data.topLocations.length === 0 ? (
             <div className="p-4 text-muted text-sm">No locations yet.</div>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-bg">
-                <tr className="text-[11px] uppercase tracking-wider text-muted">
-                  <th className="text-left px-4 py-2">Location</th>
-                  <th className="text-right px-4 py-2">Calls</th>
-                  <th className="text-right px-4 py-2">Directions</th>
-                  <th className="text-right px-4 py-2">Website</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.topLocations.map(t => (
-                  <tr
-                    key={t.location_id}
-                    className="border-t border-bg-border hover:bg-bg cursor-pointer"
-                    onClick={() => {
-                      const p = new URLSearchParams(search.toString());
-                      p.set("locationId", t.location_id);
-                      router.push(`${pathname}?${p.toString()}`);
-                    }}
-                  >
-                    <td className="px-4 py-2 flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-brand-indigo" /> {t.title}</td>
-                    <td className="px-4 py-2 text-right">{fmt(t.calls)}</td>
-                    <td className="px-4 py-2 text-right">{fmt(t.directions)}</td>
-                    <td className="px-4 py-2 text-right">{fmt(t.website)}</td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[520px]">
+                <thead className="bg-bg">
+                  <tr className="text-[11px] uppercase tracking-wider text-muted">
+                    <th className="text-left px-4 py-2">Location</th>
+                    <th className="text-right px-4 py-2">Calls</th>
+                    <th className="text-right px-4 py-2">Directions</th>
+                    <th className="text-right px-4 py-2">Website</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {data.topLocations.map(t => (
+                    <tr
+                      key={t.location_id}
+                      className="border-t border-bg-border hover:bg-bg cursor-pointer"
+                      onClick={() => {
+                        const p = new URLSearchParams(search.toString());
+                        p.set("locationId", t.location_id);
+                        router.push(`${pathname}?${p.toString()}`);
+                      }}
+                    >
+                      <td className="px-4 py-2"><span className="flex items-center gap-1.5"><MapPin className="h-3.5 w-3.5 text-brand-indigo" /> {t.title}</span></td>
+                      <td className="px-4 py-2 text-right">{fmt(t.calls)}</td>
+                      <td className="px-4 py-2 text-right">{fmt(t.directions)}</td>
+                      <td className="px-4 py-2 text-right">{fmt(t.website)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
 
@@ -219,7 +277,7 @@ function OverviewInner() {
           <div className="p-4 text-muted text-sm">No daily data for this range.</div>
         ) : (
           <div className="max-h-[320px] overflow-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[480px]">
               <thead className="bg-bg sticky top-0">
                 <tr className="text-[11px] uppercase tracking-wider text-muted">
                   <th className="text-left px-4 py-2">Date</th>

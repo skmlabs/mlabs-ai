@@ -9,6 +9,7 @@ import { parseISO, format, startOfWeek, startOfMonth } from "date-fns";
 
 type Point = { date: string; calls: number; directions: number; website: number };
 type Granularity = "daily" | "weekly" | "monthly";
+export type TrendMetric = "all" | "calls" | "directions" | "website";
 
 const COLORS = {
   calls: "#6366f1",
@@ -79,22 +80,49 @@ const GRAN_OPTS: { key: Granularity; label: string }[] = [
   { key: "monthly", label: "Monthly" },
 ];
 
-export function TrendChart({ data }: { data: Point[] }) {
+const METRIC_TITLE: Record<TrendMetric, string> = {
+  all: "Trend",
+  calls: "Trend — Calls",
+  directions: "Trend — Directions",
+  website: "Trend — Website",
+};
+
+interface Props {
+  data: Point[];
+  selectedMetric?: TrendMetric;
+  onResetMetric?: () => void;
+}
+
+export function TrendChart({ data, selectedMetric = "all", onResetMetric }: Props) {
   const [gran, setGran] = useState<Granularity>("daily");
   const series = useMemo(() => aggregate(data, gran), [data, gran]);
 
   if (data.length === 0) {
     return (
-      <div className="bg-bg-card border border-bg-border rounded-xl p-6 h-[300px] flex items-center justify-center text-muted text-sm">
+      <div className="bg-bg-card border border-bg-border rounded-xl p-6 h-[240px] md:h-[300px] flex items-center justify-center text-muted text-sm">
         No trend data for this range.
       </div>
     );
   }
 
+  const showCalls = selectedMetric === "all" || selectedMetric === "calls";
+  const showDirections = selectedMetric === "all" || selectedMetric === "directions";
+  const showWebsite = selectedMetric === "all" || selectedMetric === "website";
+
   return (
     <div className="bg-bg-card border border-bg-border rounded-xl p-4">
       <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <div className="text-sm font-medium">Trend</div>
+        <div className="flex items-center gap-3">
+          <div className="text-sm font-medium">{METRIC_TITLE[selectedMetric]}</div>
+          {selectedMetric !== "all" && onResetMetric ? (
+            <button
+              onClick={onResetMetric}
+              className="text-xs text-brand-indigo hover:underline"
+            >
+              Show all metrics
+            </button>
+          ) : null}
+        </div>
         <div className="inline-flex bg-bg border border-bg-border rounded-lg p-1 text-[11px]">
           {GRAN_OPTS.map(o => (
             <button
@@ -107,13 +135,13 @@ export function TrendChart({ data }: { data: Point[] }) {
           ))}
         </div>
       </div>
-      <div style={{ width: "100%", height: 280 }}>
+      <div className="w-full h-[240px] md:h-[300px] lg:h-[360px]">
         <ResponsiveContainer>
           <LineChart data={series} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="#1f2230" strokeDasharray="3 3" vertical={false} />
             <XAxis
               dataKey="date"
-              tick={{ fill: "#8a8fa0", fontSize: 11 }}
+              tick={{ fill: "#8a8fa0", fontSize: 10 }}
               tickLine={false}
               axisLine={{ stroke: "#1f2230" }}
               tickFormatter={d => formatXAxis(d, gran)}
@@ -134,9 +162,15 @@ export function TrendChart({ data }: { data: Point[] }) {
               wrapperStyle={{ fontSize: 11, paddingTop: 8 }}
               formatter={v => <span style={{ color: "#8a8fa0", textTransform: "capitalize" }}>{v}</span>}
             />
-            <Line type="monotone" dataKey="calls" name="Calls" stroke={COLORS.calls} strokeWidth={2} dot={false} activeDot={{ r: 5 }} />
-            <Line type="monotone" dataKey="directions" name="Directions" stroke={COLORS.directions} strokeWidth={2} dot={false} activeDot={{ r: 5 }} />
-            <Line type="monotone" dataKey="website" name="Website" stroke={COLORS.website} strokeWidth={2} dot={false} activeDot={{ r: 5 }} />
+            {showCalls ? (
+              <Line type="monotone" dataKey="calls" name="Calls" stroke={COLORS.calls} strokeWidth={2} dot={false} activeDot={{ r: 5 }} />
+            ) : null}
+            {showDirections ? (
+              <Line type="monotone" dataKey="directions" name="Directions" stroke={COLORS.directions} strokeWidth={2} dot={false} activeDot={{ r: 5 }} />
+            ) : null}
+            {showWebsite ? (
+              <Line type="monotone" dataKey="website" name="Website" stroke={COLORS.website} strokeWidth={2} dot={false} activeDot={{ r: 5 }} />
+            ) : null}
           </LineChart>
         </ResponsiveContainer>
       </div>
