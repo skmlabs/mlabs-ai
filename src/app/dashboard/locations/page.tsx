@@ -8,7 +8,8 @@ import { SortableHeader, type SortDir } from "@/components/SortableHeader";
 import { ExportButton } from "@/components/ExportButton";
 import { exportToExcel } from "@/lib/exportExcel";
 import { normalizeRangeKey, type DateRangeKey } from "@/lib/dateRange";
-import { Loader2, MapPin, Star } from "lucide-react";
+import { timeAgo } from "@/lib/timeAgo";
+import { Loader2, MapPin, RefreshCw, Star } from "lucide-react";
 
 type Row = {
   id: string;
@@ -54,6 +55,9 @@ function LocationsInner() {
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey>("calls");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncBanner, setSyncBanner] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,6 +77,32 @@ function LocationsInner() {
     }
   }, [range, customStart, customEnd]);
   useEffect(() => { load(); }, [load]);
+
+  const loadSyncStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/sync-status");
+      if (res.ok) {
+        const j = await res.json() as { last_synced_at: string | null };
+        setLastSyncedAt(j.last_synced_at);
+      }
+    } catch { /* non-blocking */ }
+  }, []);
+  useEffect(() => { loadSyncStatus(); }, [loadSyncStatus]);
+
+  async function syncNow() {
+    setSyncing(true); setSyncBanner(null);
+    try {
+      const qs = new URLSearchParams({ range });
+      if (range === "custom" && customStart && customEnd) { qs.set("start", customStart); qs.set("end", customEnd); }
+      const res = await fetch(`/api/gmb/sync-now?${qs.toString()}`, { method: "POST" });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? "sync failed");
+      setSyncBanner(`Synced. Reviews: ${j.reviews.total_fetched} across ${j.reviews.locations} location(s).`);
+      await Promise.all([load(), loadSyncStatus()]);
+    } catch (e) {
+      setSyncBanner(e instanceof Error ? e.message : "Sync failed");
+    } finally { setSyncing(false); }
+  }
 
   const sortedRows = useMemo(() => {
     const r = [...rows];
@@ -142,13 +172,24 @@ function LocationsInner() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold">My Locations</h1>
-          <div className="text-xs text-muted mt-1">{meta ? `${meta.label} · ${meta.start} to ${meta.end}` : ""}</div>
+          <div className="text-xs text-muted mt-1 flex items-center gap-3 flex-wrap">
+            <span>{meta ? `${meta.label} · ${meta.start} to ${meta.end}` : ""}</span>
+            <span className="flex items-center gap-1">
+              <RefreshCw className="h-3 w-3" />
+              <span>Last synced {timeAgo(lastSyncedAt)}</span>
+              <button onClick={syncNow} disabled={syncing} className="text-brand-indigo hover:underline disabled:opacity-50 ml-1">
+                {syncing ? "Syncing…" : "Sync now"}
+              </button>
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <DateRangePills value={range} onChange={setRange} onCustomApply={applyCustomRange} customStart={customStart} customEnd={customEnd} />
           <ExportButton onClick={onExport} label="Export to Excel" disabled={rows.length === 0} />
         </div>
       </div>
+
+      {syncBanner ? <div className="bg-bg-card border border-bg-border rounded-lg px-4 py-2.5 text-sm text-muted">{syncBanner}</div> : null}
 
       {filteredTitle ? <FilterPill locationTitle={filteredTitle} /> : null}
 

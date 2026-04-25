@@ -4,6 +4,12 @@
   "buildCommand": "npm run build",
   "installCommand": "npm ci",
   "regions": ["bom1"],
+  "crons": [
+    {
+      "path": "/api/cron/sync-all",
+      "schedule": "30 19 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/(.*)",

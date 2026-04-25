@@ -27,7 +27,7 @@ export async function GET(request: Request) {
 
   let revQuery = supabase
     .from("cached_reviews")
-    .select("id, location_id, author_name, author_photo_url, rating, text, publish_time")
+    .select("id, location_id, author_name, author_photo_url, rating, text, publish_time, reply_text, reply_create_time, replied_by_name, has_reply")
     .in("location_id", locIds)
     .order("publish_time", { ascending: false, nullsFirst: false });
 
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
     avg_rating: number | null;
     total_reviews: number;
     distribution: { 1: number; 2: number; 3: number; 4: number; 5: number };
-    reviews: Array<{ id: string; author_name: string | null; author_photo_url: string | null; rating: number | null; text: string | null; publish_time: string | null }>;
+    reviews: Array<{ id: string; author_name: string | null; author_photo_url: string | null; rating: number | null; text: string | null; publish_time: string | null; reply_text: string | null; reply_create_time: string | null; replied_by_name: string | null; has_reply: boolean | null }>;
   }>();
 
   for (const l of locs) {
@@ -61,7 +61,18 @@ export async function GET(request: Request) {
   for (const r of reviews ?? []) {
     const g = byLoc.get(r.location_id);
     if (!g) continue;
-    g.reviews.push({ id: r.id, author_name: r.author_name, author_photo_url: r.author_photo_url, rating: r.rating, text: r.text, publish_time: r.publish_time });
+    g.reviews.push({
+      id: r.id,
+      author_name: r.author_name,
+      author_photo_url: r.author_photo_url,
+      rating: r.rating,
+      text: r.text,
+      publish_time: r.publish_time,
+      reply_text: r.reply_text,
+      reply_create_time: r.reply_create_time,
+      replied_by_name: r.replied_by_name,
+      has_reply: r.has_reply,
+    });
     const rating = r.rating;
     if (rating !== null && rating >= 1 && rating <= 5) {
       g.distribution[rating as 1 | 2 | 3 | 4 | 5]++;

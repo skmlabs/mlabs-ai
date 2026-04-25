@@ -13,6 +13,9 @@ type FlatReview = {
   rating: number | "";
   text: string;
   publish_time: string;
+  reply_text: string;
+  reply_date: string;
+  replied_by_name: string;
 };
 
 type Group = {
@@ -22,7 +25,18 @@ type Group = {
   avg_rating: number | null;
   total_reviews: number;
   distribution: { 1: number; 2: number; 3: number; 4: number; 5: number };
-  reviews: Array<{ id: string; author_name: string | null; author_photo_url: string | null; rating: number | null; text: string | null; publish_time: string | null }>;
+  reviews: Array<{
+    id: string;
+    author_name: string | null;
+    author_photo_url: string | null;
+    rating: number | null;
+    text: string | null;
+    publish_time: string | null;
+    reply_text: string | null;
+    reply_create_time: string | null;
+    replied_by_name: string | null;
+    has_reply: boolean | null;
+  }>;
 };
 
 const STAR_FILTERS = [
@@ -93,6 +107,9 @@ function ReviewsInner() {
           rating: typeof r.rating === "number" ? r.rating : "",
           text: r.text ?? "",
           publish_time: r.publish_time ? new Date(r.publish_time).toISOString().slice(0, 10) : "",
+          reply_text: r.reply_text ?? "",
+          reply_date: r.reply_create_time ? new Date(r.reply_create_time).toISOString().slice(0, 10) : "",
+          replied_by_name: r.replied_by_name ?? "",
         });
       }
     }
@@ -105,6 +122,9 @@ function ReviewsInner() {
         { key: "rating", label: "Rating" },
         { key: "text", label: "Review" },
         { key: "publish_time", label: "Published" },
+        { key: "reply_text", label: "Reply" },
+        { key: "reply_date", label: "Reply Date" },
+        { key: "replied_by_name", label: "Replied By" },
       ],
       `reviews-${datePart}`,
       "Reviews",

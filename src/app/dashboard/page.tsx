@@ -9,6 +9,7 @@ import { FilterPill } from "@/components/FilterPill";
 import { ExportButton } from "@/components/ExportButton";
 import { exportToExcel } from "@/lib/exportExcel";
 import { normalizeRangeKey, type DateRangeKey } from "@/lib/dateRange";
+import { timeAgo } from "@/lib/timeAgo";
 import { Loader2, RefreshCw, MapPin, Star } from "lucide-react";
 
 type OverviewResponse = {
@@ -46,9 +47,10 @@ function OverviewInner() {
   const [data, setData] = useState<OverviewResponse | null>(null);
   const [filteredTitle, setFilteredTitle] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState<"metrics" | "reviews" | null>(null);
+  const [syncing, setSyncing] = useState<"metrics" | "reviews" | "all" | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const [selectedMetric, setSelectedMetric] = useState<TrendMetric>("all");
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -77,6 +79,17 @@ function OverviewInner() {
   }, [range, locationId, customStart, customEnd]);
   useEffect(() => { load(); }, [load]);
 
+  const loadSyncStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/sync-status");
+      if (res.ok) {
+        const j = await res.json() as { last_synced_at: string | null };
+        setLastSyncedAt(j.last_synced_at);
+      }
+    } catch { /* non-blocking */ }
+  }, []);
+  useEffect(() => { loadSyncStatus(); }, [loadSyncStatus]);
+
   function setRange(k: DateRangeKey) {
     const p = new URLSearchParams(search.toString());
     p.set("range", k);
@@ -104,7 +117,7 @@ function OverviewInner() {
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "sync failed");
       setBanner(`Metrics sync: ${j.synced} OK, ${j.pendingApiAccess} pending approval, ${j.errors} errors.`);
-      await load();
+      await Promise.all([load(), loadSyncStatus()]);
     } catch (e) {
       setBanner(e instanceof Error ? e.message : "Sync failed");
     } finally { setSyncing(null); }
@@ -113,11 +126,31 @@ function OverviewInner() {
   async function syncReviews() {
     setSyncing("reviews"); setBanner(null);
     try {
-      const res = await fetch("/api/gmb/reviews/sync", { method: "POST" });
+      // Phase 5A.6: switched from Places-API limited fetch to GMB v4 paginated fetch.
+      const res = await fetch("/api/gmb/reviews/sync-full", { method: "POST" });
       const j = await res.json();
       if (!res.ok) throw new Error(j.error ?? "sync failed");
-      setBanner(`Reviews sync: ${j.synced} locations updated, ${j.failed} failed.`);
-      await load();
+      const locsCount = Array.isArray(j.per_location) ? j.per_location.length : 0;
+      setBanner(`Reviews sync: ${j.total_fetched ?? 0} review(s) across ${locsCount} location(s).`);
+      await Promise.all([load(), loadSyncStatus()]);
+    } catch (e) {
+      setBanner(e instanceof Error ? e.message : "Sync failed");
+    } finally { setSyncing(null); }
+  }
+
+  async function syncNow() {
+    setSyncing("all"); setBanner(null);
+    try {
+      const qs = new URLSearchParams({ range });
+      if (range === "custom" && customStart && customEnd) {
+        qs.set("start", customStart);
+        qs.set("end", customEnd);
+      }
+      const res = await fetch(`/api/gmb/sync-now?${qs.toString()}`, { method: "POST" });
+      const j = await res.json();
+      if (!res.ok) throw new Error(j.error ?? "sync failed");
+      setBanner(`Synced. Metrics: ${j.metrics.ok} ok / ${j.metrics.pending_api_access} pending. Reviews: ${j.reviews.total_fetched} across ${j.reviews.locations} location(s).`);
+      await Promise.all([load(), loadSyncStatus()]);
     } catch (e) {
       setBanner(e instanceof Error ? e.message : "Sync failed");
     } finally { setSyncing(null); }
@@ -175,7 +208,16 @@ function OverviewInner() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold">Overview</h1>
-          <div className="text-xs text-muted mt-1">{data.range.label} · {data.range.start} to {data.range.end}</div>
+          <div className="text-xs text-muted mt-1 flex items-center gap-3 flex-wrap">
+            <span>{data.range.label} · {data.range.start} to {data.range.end}</span>
+            <span className="flex items-center gap-1">
+              <RefreshCw className="h-3 w-3" />
+              <span>Last synced {timeAgo(lastSyncedAt)}</span>
+              <button onClick={syncNow} disabled={syncing !== null} className="text-brand-indigo hover:underline disabled:opacity-50 ml-1">
+                {syncing === "all" ? "Syncing…" : "Sync now"}
+              </button>
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <DateRangePills value={range} onChange={setRange} onCustomApply={applyCustomRange} customStart={customStart} customEnd={customEnd} />
