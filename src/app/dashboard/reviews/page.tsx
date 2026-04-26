@@ -1,10 +1,12 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { FilterPill } from "@/components/FilterPill";
 import { ExportButton } from "@/components/ExportButton";
+import { DateRangePills } from "@/components/DateRangePills";
 import { exportToExcel } from "@/lib/exportExcel";
+import { getDateRange, isValidYMD, normalizeRangeKey, type DateRangeKey } from "@/lib/dateRange";
 import { Loader2, Star, MapPin, ChevronDown, ChevronUp } from "lucide-react";
 
 type FlatReview = {
@@ -13,30 +15,29 @@ type FlatReview = {
   rating: number | "";
   text: string;
   publish_time: string;
-  reply_text: string;
-  reply_date: string;
-  replied_by_name: string;
+  publish_time_relative: string;
+};
+
+type GroupReview = {
+  id: string;
+  author_name: string | null;
+  author_photo_url: string | null;
+  rating: number | null;
+  text: string | null;
+  publish_time: string | null;
+  relative_time: string | null;
 };
 
 type Group = {
   location_id: string;
   title: string;
   address: string | null;
+  city: string | null;
   avg_rating: number | null;
   total_reviews: number;
+  shown_reviews: number;
   distribution: { 1: number; 2: number; 3: number; 4: number; 5: number };
-  reviews: Array<{
-    id: string;
-    author_name: string | null;
-    author_photo_url: string | null;
-    rating: number | null;
-    text: string | null;
-    publish_time: string | null;
-    reply_text: string | null;
-    reply_create_time: string | null;
-    replied_by_name: string | null;
-    has_reply: boolean | null;
-  }>;
+  reviews: GroupReview[];
 };
 
 const STAR_FILTERS = [
@@ -62,6 +63,9 @@ function ReviewsInner() {
   const locationId = search.get("locationId");
   const minRating = search.get("minRating") ?? "";
   const maxRating = search.get("maxRating") ?? "";
+  const range = normalizeRangeKey(search.get("range"));
+  const customStart = search.get("start") ?? undefined;
+  const customEnd = search.get("end") ?? undefined;
 
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,11 +90,57 @@ function ReviewsInner() {
 
   const filteredTitle = locationId ? groups.find(g => g.location_id === locationId)?.title ?? null : null;
 
+  // Date range filtering happens client-side. With only 5 cached reviews per
+  // location (Places API limit), short ranges will often return 0 — that's
+  // expected, not a bug, until we get GMB v4 access for full review history.
+  const dateBounds = useMemo(() => {
+    const custom = range === "custom" && isValidYMD(customStart) && isValidYMD(customEnd)
+      ? { start: customStart, end: customEnd } : undefined;
+    const { start, end } = getDateRange(range, custom);
+    const startMs = start.getTime();
+    const endBoundary = new Date(end);
+    endBoundary.setUTCHours(23, 59, 59, 999);
+    if (endBoundary.getTime() < Date.now()) endBoundary.setTime(Date.now());
+    return { startMs, endMs: endBoundary.getTime() };
+  }, [range, customStart, customEnd]);
+
+  const dateFilteredGroups = useMemo(() => {
+    return groups.map(g => {
+      const inRange = g.reviews.filter(r => {
+        if (!r.publish_time) return true;  // keep undated reviews visible
+        const t = new Date(r.publish_time).getTime();
+        return t >= dateBounds.startMs && t <= dateBounds.endMs;
+      });
+      const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } as Record<1 | 2 | 3 | 4 | 5, number>;
+      for (const r of inRange) {
+        if (typeof r.rating === "number" && r.rating >= 1 && r.rating <= 5) {
+          distribution[r.rating as 1 | 2 | 3 | 4 | 5]++;
+        }
+      }
+      return { ...g, reviews: inRange, shown_reviews: inRange.length, distribution };
+    });
+  }, [groups, dateBounds]);
+
   function setStarFilter(min: string, max: string) {
     const p = new URLSearchParams(search.toString());
     if (min) p.set("minRating", min); else p.delete("minRating");
     if (max) p.set("maxRating", max); else p.delete("maxRating");
     router.push(`${pathname}${p.toString() ? "?" + p.toString() : ""}`);
+  }
+
+  function setRange(k: DateRangeKey) {
+    const p = new URLSearchParams(search.toString());
+    p.set("range", k);
+    if (k !== "custom") { p.delete("start"); p.delete("end"); }
+    router.push(`${pathname}?${p.toString()}`);
+  }
+
+  function applyCustomRange(start: string, end: string) {
+    const p = new URLSearchParams(search.toString());
+    p.set("range", "custom");
+    p.set("start", start);
+    p.set("end", end);
+    router.push(`${pathname}?${p.toString()}`);
   }
 
   function toggle(locId: string) {
@@ -99,7 +149,7 @@ function ReviewsInner() {
 
   async function onExport() {
     const flat: FlatReview[] = [];
-    for (const g of groups) {
+    for (const g of dateFilteredGroups) {
       for (const r of g.reviews) {
         flat.push({
           location_name: g.title,
@@ -107,9 +157,7 @@ function ReviewsInner() {
           rating: typeof r.rating === "number" ? r.rating : "",
           text: r.text ?? "",
           publish_time: r.publish_time ? new Date(r.publish_time).toISOString().slice(0, 10) : "",
-          reply_text: r.reply_text ?? "",
-          reply_date: r.reply_create_time ? new Date(r.reply_create_time).toISOString().slice(0, 10) : "",
-          replied_by_name: r.replied_by_name ?? "",
+          publish_time_relative: r.relative_time ?? "",
         });
       }
     }
@@ -118,20 +166,18 @@ function ReviewsInner() {
       flat,
       [
         { key: "location_name", label: "Location" },
-        { key: "reviewer_name", label: "Reviewer" },
         { key: "rating", label: "Rating" },
+        { key: "reviewer_name", label: "Author" },
         { key: "text", label: "Review" },
-        { key: "publish_time", label: "Published" },
-        { key: "reply_text", label: "Reply" },
-        { key: "reply_date", label: "Reply Date" },
-        { key: "replied_by_name", label: "Replied By" },
+        { key: "publish_time", label: "Posted" },
+        { key: "publish_time_relative", label: "Posted (relative)" },
       ],
       `reviews-${datePart}`,
       "Reviews",
     );
   }
 
-  const totalReviewsShown = groups.reduce((sum, g) => sum + g.reviews.length, 0);
+  const totalReviewsShown = dateFilteredGroups.reduce((sum, g) => sum + g.reviews.length, 0);
 
   return (
     <div className="space-y-6">
@@ -141,6 +187,7 @@ function ReviewsInner() {
           <div className="text-xs text-muted mt-1">Grouped by location, most recent first.</div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <DateRangePills value={range} onChange={setRange} onCustomApply={applyCustomRange} customStart={customStart} customEnd={customEnd} />
           <div className="inline-flex bg-bg-card border border-bg-border rounded-lg p-1 text-xs">
             {STAR_FILTERS.map(f => {
               const active = (f.min === minRating) && (f.max === maxRating);
@@ -159,24 +206,29 @@ function ReviewsInner() {
 
       {loading ? (
         <div className="flex items-center gap-2 text-muted text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Loading reviews…</div>
-      ) : groups.length === 0 ? (
+      ) : dateFilteredGroups.length === 0 ? (
         <div className="bg-bg-card border border-bg-border rounded-xl p-6 text-sm text-muted">
-          No reviews yet. Go to Overview and click &quot;Sync reviews&quot;.
+          No locations to show. Add one from Settings.
         </div>
       ) : (
         <div className="space-y-4">
-          {groups.map(g => {
-            const isOpen = expanded[g.location_id] ?? groups.length <= 2;
+          {dateFilteredGroups.map(g => {
+            const isOpen = expanded[g.location_id] ?? dateFilteredGroups.length <= 2;
             const maxDist = Math.max(g.distribution[1], g.distribution[2], g.distribution[3], g.distribution[4], g.distribution[5], 1);
+            // Header: "{shown} shown · {total} total on Google" — falls back to
+            // "{shown} shown" when total isn't available yet (manual entries).
+            const headerCount = g.total_reviews > 0
+              ? `${g.shown_reviews} shown · ${g.total_reviews.toLocaleString()} total on Google`
+              : `${g.shown_reviews} shown`;
             return (
               <div key={g.location_id} className="bg-bg-card border border-bg-border rounded-xl overflow-hidden">
                 <button onClick={() => toggle(g.location_id)} className="w-full text-left px-4 py-3 border-b border-bg-border flex items-center justify-between hover:bg-bg transition">
                   <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <MapPin className="h-3.5 w-3.5 text-brand-indigo" />
                       <span className="font-medium">{g.title}</span>
                       {g.avg_rating != null ? <span className="inline-flex items-center gap-1 text-xs text-amber-300 ml-2"><Star className="h-3 w-3 fill-amber-300" /> {g.avg_rating.toFixed(1)}</span> : null}
-                      <span className="text-xs text-muted">· {g.total_reviews} reviews · {g.reviews.length} shown</span>
+                      <span className="text-xs text-muted">· {headerCount}</span>
                     </div>
                     {g.address ? <div className="text-[11px] text-muted mt-0.5 ml-5">{g.address}</div> : null}
                   </div>
@@ -212,7 +264,9 @@ function ReviewsInner() {
                               <div className="text-xs font-medium">{r.author_name ?? "Anonymous"}</div>
                               <div className="flex items-center gap-2">
                                 {typeof r.rating === "number" ? <span className="text-xs flex items-center gap-0.5 text-amber-300"><Star className="h-3 w-3 fill-amber-300" /> {r.rating}</span> : null}
-                                {r.publish_time ? <span className="text-[11px] text-muted">{new Date(r.publish_time).toLocaleDateString()}</span> : null}
+                                <span className="text-[11px] text-muted">
+                                  {r.relative_time || (r.publish_time ? new Date(r.publish_time).toLocaleDateString() : "")}
+                                </span>
                               </div>
                             </div>
                             {r.text ? <div className="text-xs text-muted mt-1 whitespace-pre-line">{r.text}</div> : <div className="text-[11px] text-muted italic mt-1">No text</div>}
