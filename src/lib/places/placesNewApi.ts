@@ -145,3 +145,63 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
   }
   return data;
 }
+
+// ----------------------------------------------------------------------------
+// Phase 5B Session 3: extended search used by the competitor add UI. Returns
+// up to 10 results with a richer field mask (display name + maps URI) so the
+// autocomplete dropdown can render a useful card.
+// ----------------------------------------------------------------------------
+
+export interface PlaceSearchResultExtended extends PlaceSearchResult {
+  primaryTypeDisplayName?: { text: string };
+  googleMapsUri?: string;
+}
+
+interface SearchTextBodyExtended extends SearchTextBody {
+  maxResultCount?: number;
+}
+
+const SEARCH_FIELD_MASK_EXTENDED = [
+  "places.id",
+  "places.displayName",
+  "places.formattedAddress",
+  "places.location",
+  "places.rating",
+  "places.userRatingCount",
+  "places.primaryType",
+  "places.primaryTypeDisplayName",
+  "places.googleMapsUri",
+].join(",");
+
+export async function searchPlacesForCompetitor(
+  query: string,
+  locationBias?: { lat: number; lng: number; radiusMeters?: number },
+): Promise<PlaceSearchResultExtended[]> {
+  const body: SearchTextBodyExtended = { textQuery: query, maxResultCount: 10 };
+  if (locationBias) {
+    body.locationBias = {
+      circle: {
+        center: { latitude: locationBias.lat, longitude: locationBias.lng },
+        radius: locationBias.radiusMeters ?? 50000,
+      },
+    };
+  }
+
+  const res = await fetch(`${PLACES_API_BASE}/places:searchText`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": getApiKey(),
+      "X-Goog-FieldMask": SEARCH_FIELD_MASK_EXTENDED,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Places searchText failed: ${res.status} ${errText.slice(0, 300)}`);
+  }
+
+  const data = await res.json() as { places?: PlaceSearchResultExtended[] };
+  return data.places ?? [];
+}
