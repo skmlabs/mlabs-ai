@@ -81,10 +81,8 @@ function ReviewsInner() {
     const res = await fetch(`/api/gmb/reviews-by-location?${qs.toString()}`);
     const j = await res.json() as { groups: Group[] };
     setGroups(j.groups);
-    if (j.groups.length === 1) {
-      const first = j.groups[0];
-      if (first) setExpanded({ [first.location_id]: true });
-    }
+    // Cards default to collapsed regardless of count — user clicks the chevron
+    // to expand. (Previously single/double-group lists auto-expanded.)
     setLoading(false);
   }, [locationId, minRating, maxRating]);
   useEffect(() => { load(); }, [load]);
@@ -176,7 +174,7 @@ function ReviewsInner() {
       ) : (
         <div className="space-y-4">
           {groups.map(g => {
-            const isOpen = expanded[g.location_id] ?? groups.length <= 2;
+            const isOpen = expanded[g.location_id] ?? false;
             const maxDist = Math.max(g.distribution[1], g.distribution[2], g.distribution[3], g.distribution[4], g.distribution[5], 1);
             // Header: "{shown} shown · {total} total on Google" — falls back to
             // "{shown} shown" when total isn't available yet (manual entries).
