@@ -336,9 +336,9 @@ function ReviewDetail({ review, onClose }: ReviewDetailProps) {
           <div className="text-xs italic text-muted mt-4">Reviewer left no text.</div>
         )}
 
-        {/* Single deep-link out to GBP — direct reply API isn't available until
-            GMB v4 access propagates. Opens in a new tab so the user keeps the
-            inbox state on return. */}
+        {/* Documented Google Maps place URL — the GBP /reviews/l/{name} deep-link
+            is undocumented and 404s. Owners reply to reviews from inside Maps.
+            Opens in a new tab so the user keeps the inbox state on return. */}
         {review.reply_on_google_url ? (
           <div className="mt-6">
             <a
@@ -347,10 +347,10 @@ function ReviewDetail({ review, onClose }: ReviewDetailProps) {
               rel="noopener noreferrer"
               className="inline-flex items-center gap-2 px-4 py-2 rounded-md bg-brand-indigo text-white text-sm font-medium hover:bg-indigo-600 transition"
             >
-              Reply on Google <ExternalLink className="h-3.5 w-3.5" />
+              Open on Google <ExternalLink className="h-3.5 w-3.5" />
             </a>
             <p className="text-[11px] text-muted mt-2">
-              Opens Google Business Profile in a new tab. Inline replies will return once Google API access propagates.
+              Opens this location in Google Maps. Owners can reply to reviews from there. Inline replies will return once Google Business Profile API access propagates.
             </p>
           </div>
         ) : null}
