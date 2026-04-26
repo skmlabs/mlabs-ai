@@ -9,12 +9,13 @@ import { ExportButton } from "@/components/ExportButton";
 import { exportToExcel } from "@/lib/exportExcel";
 import { normalizeRangeKey, type DateRangeKey } from "@/lib/dateRange";
 import { timeAgo } from "@/lib/timeAgo";
-import { Loader2, MapPin, RefreshCw, Star } from "lucide-react";
+import { AlertTriangle, Loader2, MapPin, RefreshCw, Star } from "lucide-react";
 
 type Row = {
   id: string;
   title: string;
   address: string | null;
+  city: string | null;
   phone: string | null;
   website: string | null;
   calls: number;
@@ -22,11 +23,17 @@ type Row = {
   website_clicks: number;
   avg_rating: number | null;
   total_reviews: number;
-  last_review_fetch: string | null;
+  places_sync_status: string | null;
   metrics_status: "ok" | "pending_api_access" | "never" | "error";
 };
 
-type SortKey = keyof Pick<Row, "title" | "calls" | "directions" | "website_clicks" | "avg_rating" | "total_reviews">;
+type SortKey = keyof Pick<Row, "title" | "city" | "calls" | "directions" | "website_clicks" | "avg_rating" | "total_reviews">;
+
+interface LocationsResponse {
+  rows: Row[];
+  range: { label: string; start: string; end: string };
+  places?: { total: number; failed: number };
+}
 
 function fmt(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
@@ -52,6 +59,7 @@ function LocationsInner() {
 
   const [rows, setRows] = useState<Row[]>([]);
   const [meta, setMeta] = useState<{ label: string; start: string; end: string } | null>(null);
+  const [placesMeta, setPlacesMeta] = useState<{ total: number; failed: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey>("calls");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -69,9 +77,10 @@ function LocationsInner() {
       }
       const res = await fetch(`/api/gmb/locations-table?${qs.toString()}`);
       if (!res.ok) throw new Error(await res.text());
-      const j = await res.json() as { rows: Row[]; range: { label: string; start: string; end: string } };
+      const j = await res.json() as LocationsResponse;
       setRows(j.rows);
       setMeta(j.range);
+      setPlacesMeta(j.places ?? null);
     } finally {
       setLoading(false);
     }
@@ -152,6 +161,7 @@ function LocationsInner() {
       visibleRows,
       [
         { key: "title", label: "Location" },
+        { key: "city", label: "City", format: v => typeof v === "string" ? v : "" },
         { key: "address", label: "Address", format: v => typeof v === "string" ? v : "" },
         { key: "phone", label: "Phone", format: v => typeof v === "string" ? v : "" },
         { key: "website", label: "Website", format: v => typeof v === "string" ? v : "" },
@@ -191,6 +201,14 @@ function LocationsInner() {
 
       {syncBanner ? <div className="bg-bg-card border border-bg-border rounded-lg px-4 py-2.5 text-sm text-muted">{syncBanner}</div> : null}
 
+      {/* Subtle warning if any location's Places sync failed. Updated counts come from the daily cron. */}
+      {placesMeta && placesMeta.failed > 0 ? (
+        <div className="flex items-start gap-2 bg-amber-500/5 border border-amber-500/20 text-amber-200 rounded-lg px-4 py-2.5 text-sm">
+          <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+          <span>Some location data sync failed. {placesMeta.total - placesMeta.failed} of {placesMeta.total} locations updated. Try syncing again or contact support.</span>
+        </div>
+      ) : null}
+
       {filteredTitle ? <FilterPill locationTitle={filteredTitle} /> : null}
 
       {loading ? (
@@ -202,10 +220,11 @@ function LocationsInner() {
       ) : (
         <div className="bg-bg-card border border-bg-border rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[900px]">
+            <table className="w-full text-sm min-w-[1000px]">
               <thead className="bg-bg">
                 <tr>
                   <SortableHeader label="Location" active={sortKey === "title"} dir={sortDir} onClick={() => toggleSort("title")} />
+                  <SortableHeader label="City" active={sortKey === "city"} dir={sortDir} onClick={() => toggleSort("city")} />
                   <SortableHeader label="Calls" align="right" active={sortKey === "calls"} dir={sortDir} onClick={() => toggleSort("calls")} />
                   <SortableHeader label="Directions" align="right" active={sortKey === "directions"} dir={sortDir} onClick={() => toggleSort("directions")} />
                   <SortableHeader label="Website" align="right" active={sortKey === "website_clicks"} dir={sortDir} onClick={() => toggleSort("website_clicks")} />
@@ -228,11 +247,14 @@ function LocationsInner() {
                         <div className="flex items-center gap-2"><MapPin className="h-3.5 w-3.5 text-brand-indigo" /> <span className="font-medium">{r.title}</span></div>
                         {r.address ? <div className="text-[11px] text-muted mt-0.5 ml-5">{r.address}</div> : null}
                       </td>
+                      <td className="px-4 py-3 text-muted">{r.city ?? <span className="text-muted/60">—</span>}</td>
                       <td className="px-4 py-3 text-right">{dash(r.calls)}</td>
                       <td className="px-4 py-3 text-right">{dash(r.directions)}</td>
                       <td className="px-4 py-3 text-right">{dash(r.website_clicks)}</td>
                       <td className="px-4 py-3 text-right">
-                        {r.avg_rating != null ? <span className="inline-flex items-center gap-1"><Star className="h-3 w-3 fill-amber-300 text-amber-300" /> {r.avg_rating.toFixed(1)}</span> : <span className="text-muted">—</span>}
+                        {r.avg_rating != null
+                          ? <span className="inline-flex items-center gap-1 text-amber-300"><Star className="h-3 w-3 fill-amber-300 text-amber-300" /> {r.avg_rating.toFixed(1)}</span>
+                          : <span className="text-muted">—</span>}
                       </td>
                       <td className="px-4 py-3 text-right">{r.total_reviews > 0 ? fmt(r.total_reviews) : <span className="text-muted">—</span>}</td>
                     </tr>
