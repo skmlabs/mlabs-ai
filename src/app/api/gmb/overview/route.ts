@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { getDateRange, toYMD, isValidYMD, normalizeRangeKey } from "@/lib/dateRange";
+import { getLocationsWithPlacesForUser } from "@/lib/queries/placesReviews";
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -74,27 +75,39 @@ export async function GET(request: Request) {
   }
   const topLocations = Array.from(byLoc.values()).sort((a, b) => (b.calls + b.directions + b.website) - (a.calls + a.directions + a.website)).slice(0, 5);
 
-  // Review stats + recent reviews across locations
+  // Phase 5B Session 2: review stats + recent reviews now come from the Places
+  // JSONB cache (interim path while GMB API approval propagates). The response
+  // shape is preserved so the dashboard page doesn't need changes.
   let avgRating: number | null = null, totalReviews = 0;
   let recentReviews: Array<{ author: string | null; rating: number | null; text: string | null; publish_time: string | null; location_title: string | null }> = [];
   if (locIds.length > 0) {
-    const { data: stats } = await supabase.from("location_review_stats").select("average_rating, total_reviews").in("location_id", locIds);
-    if (stats && stats.length > 0) {
-      let sum = 0, n = 0;
-      for (const s of stats) {
-        if (typeof s.average_rating === "number") { sum += s.average_rating * (s.total_reviews ?? 0); n += s.total_reviews ?? 0; }
-        totalReviews += s.total_reviews ?? 0;
+    const placesLocations = await getLocationsWithPlacesForUser(user.id);
+    const scoped = locationFilter
+      ? placesLocations.filter(l => l.id === locationFilter)
+      : placesLocations;
+
+    // Weighted avg rating: sum(rating * total_ratings) / sum(total_ratings).
+    let weightedSum = 0, weightTotal = 0;
+    for (const l of scoped) {
+      const total = l.placesTotalRatings ?? 0;
+      totalReviews += total;
+      if (l.placesRating != null && total > 0) {
+        weightedSum += l.placesRating * total;
+        weightTotal += total;
       }
-      avgRating = n > 0 ? Number((sum / n).toFixed(2)) : null;
     }
-    const { data: rr } = await supabase
-      .from("cached_reviews")
-      .select("author_name, rating, text, publish_time, location_id")
-      .in("location_id", locIds)
-      .order("publish_time", { ascending: false, nullsFirst: false })
-      .limit(5);
-    const locTitleMap = new Map((locations ?? []).map(l => [l.id, l.title]));
-    recentReviews = (rr ?? []).map(r => ({ author: r.author_name, rating: r.rating, text: r.text, publish_time: r.publish_time, location_title: locTitleMap.get(r.location_id) ?? null }));
+    avgRating = weightTotal > 0 ? Number((weightedSum / weightTotal).toFixed(2)) : null;
+
+    recentReviews = scoped
+      .flatMap(l => l.recentReviews.map(r => ({
+        author: r.authorName,
+        rating: r.rating,
+        text: r.text,
+        publish_time: r.publishTime,
+        location_title: l.title,
+      })))
+      .sort((a, b) => new Date(b.publish_time ?? 0).getTime() - new Date(a.publish_time ?? 0).getTime())
+      .slice(0, 5);
   }
 
   return NextResponse.json({
