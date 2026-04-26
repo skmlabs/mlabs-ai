@@ -1,13 +1,17 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { FilterPill } from "@/components/FilterPill";
 import { ExportButton } from "@/components/ExportButton";
-import { DateRangePills } from "@/components/DateRangePills";
 import { exportToExcel } from "@/lib/exportExcel";
-import { getDateRange, isValidYMD, normalizeRangeKey, type DateRangeKey } from "@/lib/dateRange";
 import { Loader2, Star, MapPin, ChevronDown, ChevronUp } from "lucide-react";
+
+// Date range filter hidden — Places API caps at 5 reviews per location, making
+// date filtering uninformative. Restore when GMB API access propagates and full
+// review history is available.
+// import { DateRangePills } from "@/components/DateRangePills";
+// import { getDateRange, isValidYMD, normalizeRangeKey, type DateRangeKey } from "@/lib/dateRange";
 
 type FlatReview = {
   location_name: string;
@@ -63,9 +67,6 @@ function ReviewsInner() {
   const locationId = search.get("locationId");
   const minRating = search.get("minRating") ?? "";
   const maxRating = search.get("maxRating") ?? "";
-  const range = normalizeRangeKey(search.get("range"));
-  const customStart = search.get("start") ?? undefined;
-  const customEnd = search.get("end") ?? undefined;
 
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,37 +91,6 @@ function ReviewsInner() {
 
   const filteredTitle = locationId ? groups.find(g => g.location_id === locationId)?.title ?? null : null;
 
-  // Date range filtering happens client-side. With only 5 cached reviews per
-  // location (Places API limit), short ranges will often return 0 — that's
-  // expected, not a bug, until we get GMB v4 access for full review history.
-  const dateBounds = useMemo(() => {
-    const custom = range === "custom" && isValidYMD(customStart) && isValidYMD(customEnd)
-      ? { start: customStart, end: customEnd } : undefined;
-    const { start, end } = getDateRange(range, custom);
-    const startMs = start.getTime();
-    const endBoundary = new Date(end);
-    endBoundary.setUTCHours(23, 59, 59, 999);
-    if (endBoundary.getTime() < Date.now()) endBoundary.setTime(Date.now());
-    return { startMs, endMs: endBoundary.getTime() };
-  }, [range, customStart, customEnd]);
-
-  const dateFilteredGroups = useMemo(() => {
-    return groups.map(g => {
-      const inRange = g.reviews.filter(r => {
-        if (!r.publish_time) return true;  // keep undated reviews visible
-        const t = new Date(r.publish_time).getTime();
-        return t >= dateBounds.startMs && t <= dateBounds.endMs;
-      });
-      const distribution = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 } as Record<1 | 2 | 3 | 4 | 5, number>;
-      for (const r of inRange) {
-        if (typeof r.rating === "number" && r.rating >= 1 && r.rating <= 5) {
-          distribution[r.rating as 1 | 2 | 3 | 4 | 5]++;
-        }
-      }
-      return { ...g, reviews: inRange, shown_reviews: inRange.length, distribution };
-    });
-  }, [groups, dateBounds]);
-
   function setStarFilter(min: string, max: string) {
     const p = new URLSearchParams(search.toString());
     if (min) p.set("minRating", min); else p.delete("minRating");
@@ -128,20 +98,9 @@ function ReviewsInner() {
     router.push(`${pathname}${p.toString() ? "?" + p.toString() : ""}`);
   }
 
-  function setRange(k: DateRangeKey) {
-    const p = new URLSearchParams(search.toString());
-    p.set("range", k);
-    if (k !== "custom") { p.delete("start"); p.delete("end"); }
-    router.push(`${pathname}?${p.toString()}`);
-  }
-
-  function applyCustomRange(start: string, end: string) {
-    const p = new URLSearchParams(search.toString());
-    p.set("range", "custom");
-    p.set("start", start);
-    p.set("end", end);
-    router.push(`${pathname}?${p.toString()}`);
-  }
+  // Date range filter hidden — see comment block at top of file.
+  // function setRange(k: DateRangeKey) { … }
+  // function applyCustomRange(start: string, end: string) { … }
 
   function toggle(locId: string) {
     setExpanded(e => ({ ...e, [locId]: !e[locId] }));
@@ -149,7 +108,7 @@ function ReviewsInner() {
 
   async function onExport() {
     const flat: FlatReview[] = [];
-    for (const g of dateFilteredGroups) {
+    for (const g of groups) {
       for (const r of g.reviews) {
         flat.push({
           location_name: g.title,
@@ -177,17 +136,21 @@ function ReviewsInner() {
     );
   }
 
-  const totalReviewsShown = dateFilteredGroups.reduce((sum, g) => sum + g.reviews.length, 0);
+  const totalReviewsShown = groups.reduce((sum, g) => sum + g.reviews.length, 0);
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold">Reviews</h1>
-          <div className="text-xs text-muted mt-1">Grouped by location, most recent first.</div>
+          <div className="text-xs text-muted mt-1">Up to 5 most recent reviews per location, pulled from Google.</div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          {/* Date range filter hidden — Places API caps at 5 reviews per location,
+              making date filtering uninformative. Restore when GMB API access
+              propagates and full review history is available.
           <DateRangePills value={range} onChange={setRange} onCustomApply={applyCustomRange} customStart={customStart} customEnd={customEnd} />
+          */}
           <div className="inline-flex bg-bg-card border border-bg-border rounded-lg p-1 text-xs">
             {STAR_FILTERS.map(f => {
               const active = (f.min === minRating) && (f.max === maxRating);
@@ -206,14 +169,14 @@ function ReviewsInner() {
 
       {loading ? (
         <div className="flex items-center gap-2 text-muted text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Loading reviews…</div>
-      ) : dateFilteredGroups.length === 0 ? (
+      ) : groups.length === 0 ? (
         <div className="bg-bg-card border border-bg-border rounded-xl p-6 text-sm text-muted">
           No locations to show. Add one from Settings.
         </div>
       ) : (
         <div className="space-y-4">
-          {dateFilteredGroups.map(g => {
-            const isOpen = expanded[g.location_id] ?? dateFilteredGroups.length <= 2;
+          {groups.map(g => {
+            const isOpen = expanded[g.location_id] ?? groups.length <= 2;
             const maxDist = Math.max(g.distribution[1], g.distribution[2], g.distribution[3], g.distribution[4], g.distribution[5], 1);
             // Header: "{shown} shown · {total} total on Google" — falls back to
             // "{shown} shown" when total isn't available yet (manual entries).
