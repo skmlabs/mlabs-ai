@@ -120,25 +120,19 @@ export async function getAllReviewsForUser(userId: string): Promise<FlatReview[]
 }
 
 /**
- * Builds the canonical "Reply on Google" URL for a location.
- * Prefers business.google.com (direct deep-link to the GBP reviews tab).
- * Falls back to a Google Maps search URL if no GMB resource name exists
- * (manual entries) — from there the user can navigate to reviews manually.
+ * Builds the canonical "Open on Google" URL for a location.
+ * Uses the documented Google Maps place URL — `business.google.com/reviews/l/{name}`
+ * is undocumented and 404s in practice. Maps loads the location card; owners
+ * can reply to reviews from there. Inline replies return once GMB API access
+ * propagates.
+ *
+ * The first parameter is kept for backwards compatibility with callers; only
+ * `placeId` is required for the Maps URL.
  */
 export function buildReplyOnGoogleUrl(
-  gmbLocationResourceName: string | null,
+  _gmbLocationResourceName: string | null,
   placeId: string | null,
 ): string | null {
-  if (
-    gmbLocationResourceName
-    && !gmbLocationResourceName.startsWith("locations/manual:")
-  ) {
-    return `https://business.google.com/reviews/l/${gmbLocationResourceName}`;
-  }
-  // TODO: switch to business.google.com/reviews/l/{name} once we store GMB
-  // location resource name for the manual-fallback path.
-  if (placeId) {
-    return `https://www.google.com/maps/search/?api=1&query=Google&query_place_id=${encodeURIComponent(placeId)}`;
-  }
-  return null;
+  if (!placeId) return null;
+  return `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(placeId)}`;
 }
