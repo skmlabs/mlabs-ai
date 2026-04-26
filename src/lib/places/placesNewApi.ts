@@ -120,7 +120,7 @@ export async function searchPlacesByText(
 
 export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
   const res = await fetch(
-    `${PLACES_API_BASE}/places/${encodeURIComponent(placeId)}?reviews_sort=newest`,
+    `${PLACES_API_BASE}/places/${encodeURIComponent(placeId)}`,
     {
       method: "GET",
       headers: {
@@ -135,5 +135,13 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
     throw new Error(`Places details failed: ${res.status} ${errText.slice(0, 300)}`);
   }
 
-  return await res.json() as PlaceDetails;
+  // Places API (New) returns reviews ordered by relevance and ignores reviews_sort
+  // (the v1 endpoint 400s on that query param). Sort client-side, newest first.
+  const data = await res.json() as PlaceDetails;
+  if (data.reviews && data.reviews.length > 0) {
+    data.reviews.sort((a, b) =>
+      new Date(b.publishTime).getTime() - new Date(a.publishTime).getTime(),
+    );
+  }
+  return data;
 }
