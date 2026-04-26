@@ -33,6 +33,7 @@ export interface PlaceDetails {
   types?: string[];
   googleMapsUri?: string;
   primaryType?: string;
+  primaryTypeDisplayName?: { text: string; languageCode?: string };
 }
 
 export interface PlaceSearchResult {
@@ -66,6 +67,7 @@ const DETAILS_FIELD_MASK = [
   "reviews",
   "types",
   "primaryType",
+  "primaryTypeDisplayName",
   "googleMapsUri",
 ].join(",");
 
