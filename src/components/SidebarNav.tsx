@@ -9,6 +9,7 @@ const LINKS: { href: string; label: string; showBadge?: boolean }[] = [
   { href: "/dashboard/locations", label: "My Locations" },
   { href: "/dashboard/inbox", label: "Reviews Inbox", showBadge: true },
   { href: "/dashboard/reviews", label: "Reviews" },
+  { href: "/dashboard/competitors", label: "Competitors" },
   { href: "/dashboard/settings", label: "Settings" },
 ];
 
