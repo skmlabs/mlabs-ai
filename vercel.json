@@ -12,6 +12,10 @@
     {
       "path": "/api/cron/places-sync-owned",
       "schedule": "30 19 * * *"
+    },
+    {
+      "path": "/api/cron/places-sync-competitors",
+      "schedule": "30 20 * * 0"
     }
   ],
   "headers": [
