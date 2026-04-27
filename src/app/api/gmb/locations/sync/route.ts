@@ -53,6 +53,18 @@ export async function POST(request: NextRequest) {
 
     await admin.from("connected_accounts").update({ last_synced_at: new Date().toISOString() }).eq("id", account.id);
 
+    // Auto-sync Places data for newly connected/reconnected locations.
+    // Non-blocking — if Places API fails, OAuth still completes; sync
+    // will retry on the daily 1 AM IST cron. Dynamic import keeps the
+    // Places lib out of this route's static bundle.
+    try {
+      const { syncOwnedLocationsForUser } = await import("@/lib/places/syncOwnedLocations");
+      await syncOwnedLocationsForUser(user.id);
+    } catch (e) {
+      console.error("Places auto-sync after OAuth failed:", e);
+      // Do NOT throw — OAuth flow must succeed.
+    }
+
     return NextResponse.json({ ok: true, accountsFound: gmbAccounts.length, locationsSynced: totalLocations });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "unknown";
