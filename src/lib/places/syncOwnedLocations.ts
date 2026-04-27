@@ -60,6 +60,11 @@ async function syncOneLocation(admin: AdminClient, loc: LocationRow): Promise<vo
   );
 }
 
+// Process locations in parallel chunks. 5 in flight at a time stays well under
+// the Places API default 600 QPM. Sequential chunks (not full parallel) gives
+// us a predictable ceiling for very large location counts.
+const CHUNK_SIZE = 5;
+
 // Schema note: the actual column is `title` (not `name`/`location_name`) — verified
 // in supabase/migrations/0001_init.sql. Service-role client is `createAdminClient`
 // (not `createServiceRoleClient`).
@@ -78,22 +83,36 @@ export async function syncOwnedLocationsForUser(userId: string): Promise<SyncRes
 
   result.total = locations.length;
 
-  for (const loc of locations) {
-    try {
-      await syncOneLocation(admin, loc);
-      result.succeeded += 1;
-    } catch (e) {
-      const errMsg = e instanceof Error ? e.message : String(e);
-      result.failed += 1;
-      result.errors.push({ locationId: loc.id, error: errMsg });
-      await admin
-        .from("locations")
-        .update({
-          places_last_synced_at: new Date().toISOString(),
-          places_sync_status: "failed",
-          places_sync_error: errMsg.slice(0, 500),
-        })
-        .eq("id", loc.id);
+  for (let i = 0; i < locations.length; i += CHUNK_SIZE) {
+    const chunk = locations.slice(i, i + CHUNK_SIZE);
+    const chunkResults = await Promise.all(
+      chunk.map(async loc => {
+        try {
+          await syncOneLocation(admin, loc);
+          return { ok: true as const, locationId: loc.id };
+        } catch (e) {
+          const errMsg = e instanceof Error ? e.message : String(e);
+          // Mark failure on the row in the same parallel pass so a slow batch
+          // doesn't leave stale "in_progress"-looking rows.
+          await admin
+            .from("locations")
+            .update({
+              places_last_synced_at: new Date().toISOString(),
+              places_sync_status: "failed",
+              places_sync_error: errMsg.slice(0, 500),
+            })
+            .eq("id", loc.id);
+          return { ok: false as const, locationId: loc.id, error: errMsg };
+        }
+      }),
+    );
+
+    for (const r of chunkResults) {
+      if (r.ok) result.succeeded += 1;
+      else {
+        result.failed += 1;
+        result.errors.push({ locationId: r.locationId, error: r.error });
+      }
     }
   }
 
