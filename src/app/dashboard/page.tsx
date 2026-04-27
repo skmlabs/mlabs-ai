@@ -10,6 +10,7 @@ import { ExportButton } from "@/components/ExportButton";
 import { exportToExcel } from "@/lib/exportExcel";
 import { normalizeRangeKey, type DateRangeKey } from "@/lib/dateRange";
 import { timeAgo } from "@/lib/timeAgo";
+import { OnboardingGate } from "@/components/OnboardingGate";
 import { Loader2, RefreshCw, MapPin, Star } from "lucide-react";
 
 type OverviewResponse = {
@@ -127,6 +128,9 @@ function OverviewInner() {
     return <div className="flex items-center gap-2 text-muted text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Loading overview…</div>;
   }
   if (!data) return <div className="text-red-400 text-sm">Failed to load.</div>;
+
+  // No GMB-synced locations yet → onboarding takes over the whole page.
+  if (data.totals.totalLocations === 0) return <OnboardingGate />;
 
   function toggleMetric(m: Exclude<TrendMetric, "all">) {
     setSelectedMetric(prev => prev === m ? "all" : m);
