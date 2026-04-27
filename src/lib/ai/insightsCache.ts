@@ -3,9 +3,23 @@
 // functions (every request just re-hits Gemini ≈ 30s + ~$0.02 per call).
 
 const TTL_SECONDS = 7 * 24 * 60 * 60;
+const REGENERATE_LOCK_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+// Bypass the regenerate cooldown for these accounts (case-insensitive).
+// Founder/operator accounts that need ad-hoc regeneration during demos.
+const SK_BYPASS_EMAILS = ["sk@mlabsdigital.org", "sushant.iiml@gmail.com"];
 
 function cacheKey(userId: string, timeRangeDays: number): string {
   return `mlabs_ai_insights_${userId}_${timeRangeDays}d`;
+}
+
+function regenerateLockKey(userId: string): string {
+  return `mlabs_ai_regenerate_lock_${userId}`;
+}
+
+export function canBypassRegenerateGate(email: string | null | undefined): boolean {
+  if (!email) return false;
+  return SK_BYPASS_EMAILS.includes(email.toLowerCase().trim());
 }
 
 function envPair(): { url: string; token: string } | null {
@@ -63,5 +77,52 @@ export async function setCachedInsights(
     }
   } catch (e) {
     console.error("Redis set failed:", e instanceof Error ? e.message : e);
+  }
+}
+
+// Returns the remaining cooldown in seconds when a lock is active, else null.
+// Upstash /ttl returns -2 if the key doesn't exist, -1 if it exists without a
+// TTL — both mean "not locked" for our purposes.
+export async function getRegenerateLockTtl(userId: string): Promise<number | null> {
+  const env = envPair();
+  if (!env) return null;
+
+  const key = regenerateLockKey(userId);
+  try {
+    const res = await fetch(`${env.url}/ttl/${encodeURIComponent(key)}`, {
+      headers: { Authorization: `Bearer ${env.token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { result?: number };
+    const ttl = data.result;
+    if (typeof ttl !== "number" || ttl < 0) return null;
+    return ttl;
+  } catch (e) {
+    console.error("Redis ttl failed:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+export async function setRegenerateLock(userId: string): Promise<void> {
+  const env = envPair();
+  if (!env) return;
+
+  const key = regenerateLockKey(userId);
+  try {
+    const res = await fetch(`${env.url}/set/${encodeURIComponent(key)}?EX=${REGENERATE_LOCK_TTL_SECONDS}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${env.token}`,
+        "Content-Type": "text/plain",
+      },
+      // Body content doesn't matter — we only check key existence + TTL.
+      body: new Date().toISOString(),
+    });
+    if (!res.ok) {
+      console.error("Redis set lock failed:", res.status, await res.text().catch(() => ""));
+    }
+  } catch (e) {
+    console.error("Redis set lock failed:", e instanceof Error ? e.message : e);
   }
 }
