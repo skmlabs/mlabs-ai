@@ -53,16 +53,28 @@ export async function POST(request: NextRequest) {
 
     await admin.from("connected_accounts").update({ last_synced_at: new Date().toISOString() }).eq("id", account.id);
 
-    // Auto-sync Places data for newly connected/reconnected locations.
-    // Non-blocking — if Places API fails, OAuth still completes; sync
-    // will retry on the daily 1 AM IST cron. Dynamic import keeps the
-    // Places lib out of this route's static bundle.
+    // Auto-sync Places data AND GMB Performance metrics for newly connected/
+    // reconnected locations. Both are non-blocking — OAuth completes even if
+    // either fails. Run in parallel so the user isn't waiting on serial calls.
+    // Dynamic imports keep the heavier sync libs out of this route's static bundle.
     try {
-      const { syncOwnedLocationsForUser } = await import("@/lib/places/syncOwnedLocations");
-      await syncOwnedLocationsForUser(user.id);
+      const [{ syncOwnedLocationsForUser }, { syncGmbMetricsForUser }] = await Promise.all([
+        import("@/lib/places/syncOwnedLocations"),
+        import("@/lib/gmb/syncMetrics"),
+      ]);
+      await Promise.all([
+        syncOwnedLocationsForUser(user.id).catch(e => {
+          console.error("Places auto-sync after OAuth failed:", e);
+          return null;
+        }),
+        syncGmbMetricsForUser(user.id).catch(e => {
+          console.error("GMB metrics auto-sync after OAuth failed:", e);
+          return null;
+        }),
+      ]);
     } catch (e) {
-      console.error("Places auto-sync after OAuth failed:", e);
-      // Do NOT throw — OAuth flow must succeed.
+      console.error("Auto-sync wrapper failed (non-blocking):", e);
+      // Do NOT throw — OAuth flow must succeed regardless.
     }
 
     return NextResponse.json({ ok: true, accountsFound: gmbAccounts.length, locationsSynced: totalLocations });
