@@ -5,6 +5,7 @@ import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { FilterPill } from "@/components/FilterPill";
 import { ExportButton } from "@/components/ExportButton";
 import { exportToExcel } from "@/lib/exportExcel";
+import { OnboardingGate } from "@/components/OnboardingGate";
 import { Loader2, Star, MapPin, ChevronDown, ChevronUp } from "lucide-react";
 
 // Date range filter hidden — Places API caps at 5 reviews per location, making
@@ -135,6 +136,9 @@ function ReviewsInner() {
   }
 
   const totalReviewsShown = groups.reduce((sum, g) => sum + g.reviews.length, 0);
+
+  // No GMB-synced locations yet → onboarding takes over the whole page.
+  if (!loading && groups.length === 0) return <OnboardingGate />;
 
   return (
     <div className="space-y-6">
