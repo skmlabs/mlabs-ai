@@ -1,12 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertCircle, Download, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { AlertCircle, Download, Loader2, RefreshCw, Sparkles, X } from "lucide-react";
 
 interface InsightsResponse {
   insights?: string;
   cached?: boolean;
   error?: string;
+  regenerateLockedUntilDays?: number;
 }
 
 interface Section {
@@ -48,17 +49,35 @@ export default function AiInsightsPage() {
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [regenerateBanner, setRegenerateBanner] = useState<string | null>(null);
+  const [regenerateLockedDays, setRegenerateLockedDays] = useState<number | null>(null);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
 
   const load = useCallback(async (force: boolean) => {
     if (force) setRegenerating(true); else setLoading(true);
     setError(null);
+    if (force) setRegenerateBanner(null);
     try {
       const res = await fetch(`/api/ai-insights${force ? "?force=1" : ""}`, { cache: "no-store" });
       const j = await res.json() as InsightsResponse;
+
+      // Cooldown gate (HTTP 429) — keep the cached insights visible and surface
+      // the message as a non-blocking banner. Without this branch the user
+      // would see a full-page error after clicking Regenerate during cooldown.
+      if (res.status === 429) {
+        const msg = j.error ?? "Regenerate is limited to once per week.";
+        setRegenerateBanner(msg);
+        if (typeof j.regenerateLockedUntilDays === "number") {
+          setRegenerateLockedDays(j.regenerateLockedUntilDays);
+        }
+        return;
+      }
+
       if (!res.ok) throw new Error(j.error ?? `Request failed: ${res.status}`);
       setData(j);
+      // Successful regen clears any stale cooldown state.
+      setRegenerateLockedDays(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load insights");
     } finally {
@@ -67,6 +86,15 @@ export default function AiInsightsPage() {
   }, []);
 
   useEffect(() => { load(false); }, [load]);
+
+  // Auto-dismiss the cooldown banner after 6s. The Regenerate button stays
+  // disabled (via regenerateLockedDays) so the user still sees the constraint
+  // even after the toast fades.
+  useEffect(() => {
+    if (!regenerateBanner) return;
+    const id = window.setTimeout(() => setRegenerateBanner(null), 6000);
+    return () => window.clearTimeout(id);
+  }, [regenerateBanner]);
 
   const sections = useMemo(
     () => data?.insights ? extractSections(data.insights) : [],
@@ -154,14 +182,32 @@ export default function AiInsightsPage() {
           </button>
           <button
             onClick={() => load(true)}
-            disabled={regenerating || loading}
+            disabled={regenerating || loading || regenerateLockedDays !== null}
+            title={regenerateLockedDays !== null
+              ? `Available again in ${regenerateLockedDays} day${regenerateLockedDays === 1 ? "" : "s"}`
+              : undefined}
             className="text-xs bg-brand-indigo hover:bg-indigo-600 rounded-md px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50 text-white font-medium"
           >
             {regenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-            {regenerating ? "Regenerating…" : "Regenerate"}
+            {regenerating
+              ? "Regenerating…"
+              : regenerateLockedDays !== null
+                ? `Available in ${regenerateLockedDays}d`
+                : "Regenerate"}
           </button>
         </div>
       </div>
+
+      {/* Cooldown banner — non-blocking; keeps cached content visible. */}
+      {regenerateBanner ? (
+        <div className="ai-insights-no-print bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-2.5 text-sm text-amber-200 flex items-start gap-2">
+          <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+          <span className="flex-1">{regenerateBanner}</span>
+          <button onClick={() => setRegenerateBanner(null)} className="text-xs hover:opacity-70" aria-label="Dismiss">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ) : null}
 
       {/* States */}
       {loading ? (
