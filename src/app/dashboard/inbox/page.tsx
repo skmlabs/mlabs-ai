@@ -2,6 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { OnboardingGate } from "@/components/OnboardingGate";
 import { Loader2, Star, MapPin, Image as ImageIcon, ArrowLeft, ExternalLink, X } from "lucide-react";
 
 type SortKey = "newest" | "oldest" | "lowest_rating";
@@ -127,6 +128,11 @@ function InboxInner() {
 
   const reviews = data?.reviews ?? [];
   const locations = data?.locations ?? [];
+
+  // No GMB-synced locations yet → onboarding takes over the whole page.
+  // (Inbox API filters out manual entries, so an empty `locations` here means
+  // the user has no auto-synced locations at all.)
+  if (!loading && data && locations.length === 0) return <OnboardingGate />;
 
   return (
     <div className="space-y-4">
