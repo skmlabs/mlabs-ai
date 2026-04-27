@@ -9,6 +9,7 @@ import { ExportButton } from "@/components/ExportButton";
 import { exportToExcel } from "@/lib/exportExcel";
 import { normalizeRangeKey, type DateRangeKey } from "@/lib/dateRange";
 import { timeAgo } from "@/lib/timeAgo";
+import { OnboardingGate } from "@/components/OnboardingGate";
 import { AlertTriangle, Loader2, MapPin, RefreshCw, Star } from "lucide-react";
 
 type Row = {
@@ -176,6 +177,9 @@ function LocationsInner() {
       "My Locations",
     );
   }
+
+  // No GMB-synced locations yet → onboarding takes over the whole page.
+  if (!loading && rows.length === 0) return <OnboardingGate />;
 
   return (
     <div className="space-y-6">
