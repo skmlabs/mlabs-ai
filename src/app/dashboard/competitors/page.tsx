@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ExportButton } from "@/components/ExportButton";
+import { OnboardingGate } from "@/components/OnboardingGate";
 import { exportToExcel } from "@/lib/exportExcel";
 import { timeAgo } from "@/lib/timeAgo";
 import {
@@ -257,6 +258,11 @@ export default function CompetitorsPage() {
     if (times.length === 0) return null;
     return times.reduce((a, b) => (a > b ? a : b));
   }, [competitors]);
+
+  // No GMB-synced locations at all → onboarding takes over the whole page.
+  // (When the user HAS owned locations but none have a place_id yet, the
+  // existing in-page hint below still fires — different scenario.)
+  if (!loading && ownedLocations.length === 0) return <OnboardingGate />;
 
   return (
     <div className="space-y-6">
