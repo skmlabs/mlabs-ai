@@ -10,6 +10,7 @@ const LINKS: { href: string; label: string; showBadge?: boolean }[] = [
   { href: "/dashboard/inbox", label: "Reviews Inbox", showBadge: true },
   { href: "/dashboard/reviews", label: "Reviews" },
   { href: "/dashboard/competitors", label: "Competitors" },
+  { href: "/dashboard/ai-insights", label: "AI Insights" },
   { href: "/dashboard/settings/company", label: "Company" },
   { href: "/dashboard/settings", label: "Settings" },
 ];
