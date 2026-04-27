@@ -10,6 +10,7 @@ const LINKS: { href: string; label: string; showBadge?: boolean }[] = [
   { href: "/dashboard/inbox", label: "Reviews Inbox", showBadge: true },
   { href: "/dashboard/reviews", label: "Reviews" },
   { href: "/dashboard/competitors", label: "Competitors" },
+  { href: "/dashboard/settings/company", label: "Company" },
   { href: "/dashboard/settings", label: "Settings" },
 ];
 
@@ -19,7 +20,13 @@ interface Props {
 
 export function SidebarNav({ onNavigate }: Props) {
   const pathname = usePathname();
-  const active = (href: string) => href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
+  const active = (href: string) => {
+    if (href === "/dashboard") return pathname === "/dashboard";
+    // /dashboard/settings (GMB page) must NOT highlight when on a sub-route
+    // like /dashboard/settings/company.
+    if (href === "/dashboard/settings") return pathname === "/dashboard/settings";
+    return pathname.startsWith(href);
+  };
   const [unresponded, setUnresponded] = useState<number>(0);
 
   const loadCount = useCallback(async () => {
