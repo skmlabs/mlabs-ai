@@ -47,7 +47,7 @@ function OverviewInner() {
   const [data, setData] = useState<OverviewResponse | null>(null);
   const [filteredTitle, setFilteredTitle] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [syncing, setSyncing] = useState<"metrics" | "reviews" | "all" | null>(null);
+  const [syncing, setSyncing] = useState<boolean>(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [selectedMetric, setSelectedMetric] = useState<TrendMetric>("all");
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
@@ -105,41 +105,8 @@ function OverviewInner() {
     router.push(`${pathname}?${p.toString()}`);
   }
 
-  async function syncMetrics() {
-    setSyncing("metrics"); setBanner(null);
-    try {
-      const qs = new URLSearchParams({ range });
-      if (range === "custom" && customStart && customEnd) {
-        qs.set("start", customStart);
-        qs.set("end", customEnd);
-      }
-      const res = await fetch(`/api/gmb/metrics/sync?${qs.toString()}`, { method: "POST" });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error ?? "sync failed");
-      setBanner(`Metrics sync: ${j.synced} OK, ${j.pendingApiAccess} pending approval, ${j.errors} errors.`);
-      await Promise.all([load(), loadSyncStatus()]);
-    } catch (e) {
-      setBanner(e instanceof Error ? e.message : "Sync failed");
-    } finally { setSyncing(null); }
-  }
-
-  async function syncReviews() {
-    setSyncing("reviews"); setBanner(null);
-    try {
-      // Phase 5A.6: switched from Places-API limited fetch to GMB v4 paginated fetch.
-      const res = await fetch("/api/gmb/reviews/sync-full", { method: "POST" });
-      const j = await res.json();
-      if (!res.ok) throw new Error(j.error ?? "sync failed");
-      const locsCount = Array.isArray(j.per_location) ? j.per_location.length : 0;
-      setBanner(`Reviews sync: ${j.total_fetched ?? 0} review(s) across ${locsCount} location(s).`);
-      await Promise.all([load(), loadSyncStatus()]);
-    } catch (e) {
-      setBanner(e instanceof Error ? e.message : "Sync failed");
-    } finally { setSyncing(null); }
-  }
-
   async function syncNow() {
-    setSyncing("all"); setBanner(null);
+    setSyncing(true); setBanner(null);
     try {
       const qs = new URLSearchParams({ range });
       if (range === "custom" && customStart && customEnd) {
@@ -153,7 +120,7 @@ function OverviewInner() {
       await Promise.all([load(), loadSyncStatus()]);
     } catch (e) {
       setBanner(e instanceof Error ? e.message : "Sync failed");
-    } finally { setSyncing(null); }
+    } finally { setSyncing(false); }
   }
 
   if (loading) {
@@ -212,21 +179,15 @@ function OverviewInner() {
             <span>{data.range.label} · {data.range.start} to {data.range.end}</span>
             <span className="flex items-center gap-1">
               <RefreshCw className="h-3 w-3" />
-              <span>Last synced {timeAgo(lastSyncedAt)}</span>
-              <button onClick={syncNow} disabled={syncing !== null} className="text-brand-indigo hover:underline disabled:opacity-50 ml-1">
-                {syncing === "all" ? "Syncing…" : "Sync now"}
+              <span>Last synced {timeAgo(lastSyncedAt)} · metrics + reviews</span>
+              <button onClick={syncNow} disabled={syncing} className="text-brand-indigo hover:underline disabled:opacity-50 ml-1">
+                {syncing ? "Syncing…" : "Sync now"}
               </button>
             </span>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <DateRangePills value={range} onChange={setRange} onCustomApply={applyCustomRange} customStart={customStart} customEnd={customEnd} />
-          <button onClick={syncMetrics} disabled={syncing !== null} className="text-xs border border-bg-border hover:border-brand-indigo rounded-md px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50">
-            {syncing === "metrics" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />} Sync metrics
-          </button>
-          <button onClick={syncReviews} disabled={syncing !== null} className="text-xs border border-bg-border hover:border-brand-indigo rounded-md px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50">
-            {syncing === "reviews" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Star className="h-3.5 w-3.5" />} Sync reviews
-          </button>
         </div>
       </div>
 
@@ -320,7 +281,7 @@ function OverviewInner() {
         <div className="bg-bg-card border border-bg-border rounded-xl overflow-hidden">
           <div className="px-4 py-3 border-b border-bg-border text-sm font-medium">Recent reviews</div>
           {data.reviews.recent.length === 0 ? (
-            <div className="p-4 text-muted text-sm">No reviews yet. Click &quot;Sync reviews&quot; above.</div>
+            <div className="p-4 text-muted text-sm">No reviews yet. Click &quot;Sync now&quot; above to fetch.</div>
           ) : (
             <ul className="divide-y divide-bg-border">
               {data.reviews.recent.map((r, i) => (
