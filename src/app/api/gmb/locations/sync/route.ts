@@ -53,14 +53,20 @@ export async function POST(request: NextRequest) {
 
     await admin.from("connected_accounts").update({ last_synced_at: new Date().toISOString() }).eq("id", account.id);
 
-    // Auto-sync Places data AND GMB Performance metrics for newly connected/
-    // reconnected locations. Both are non-blocking — OAuth completes even if
-    // either fails. Run in parallel so the user isn't waiting on serial calls.
-    // Dynamic imports keep the heavier sync libs out of this route's static bundle.
+    // Auto-sync Places data, GMB Performance metrics, AND GMB v4 reviews for
+    // newly connected/reconnected locations. All three are non-blocking —
+    // OAuth completes even if any fails. Run in parallel so the user isn't
+    // waiting on serial calls. Dynamic imports keep the heavier sync libs
+    // out of this route's static bundle.
     try {
-      const [{ syncOwnedLocationsForUser }, { syncGmbMetricsForUser }] = await Promise.all([
+      const [
+        { syncOwnedLocationsForUser },
+        { syncGmbMetricsForUser },
+        { fetchReviewsForAllLocations },
+      ] = await Promise.all([
         import("@/lib/places/syncOwnedLocations"),
         import("@/lib/gmb/syncMetrics"),
+        import("@/lib/gmb/reviewsApi"),
       ]);
       await Promise.all([
         syncOwnedLocationsForUser(user.id).catch(e => {
@@ -69,6 +75,10 @@ export async function POST(request: NextRequest) {
         }),
         syncGmbMetricsForUser(user.id).catch(e => {
           console.error("GMB metrics auto-sync after OAuth failed:", e);
+          return null;
+        }),
+        fetchReviewsForAllLocations(user.id).catch(e => {
+          console.error("GMB reviews auto-sync after OAuth failed:", e);
           return null;
         }),
       ]);
