@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getPlaceDetails } from "./placesNewApi";
 import { extractCity } from "./cityExtractor";
 import { findPlaceIdForLocation } from "./reverseLookup";
+import { setSyncProgress } from "@/lib/sync/progress";
 
 interface SyncResult {
   total: number;
@@ -79,6 +80,13 @@ export async function syncOwnedLocationsForUser(userId: string): Promise<SyncRes
     .eq("is_active", true);
 
   if (error) throw new Error(`Failed to fetch locations: ${error.message}`);
+
+  // Initialize visible progress even when there's nothing to sync, so the
+  // UI's poller resolves to a finished state instead of hanging.
+  const total = locations?.length ?? 0;
+  const startedAt = Date.now();
+  await setSyncProgress(userId, { total, completed: 0, status: total === 0 ? "complete" : "running", startedAt, completedAt: total === 0 ? Date.now() : undefined });
+
   if (!locations || locations.length === 0) return result;
 
   result.total = locations.length;
@@ -114,7 +122,25 @@ export async function syncOwnedLocationsForUser(userId: string): Promise<SyncRes
         result.errors.push({ locationId: r.locationId, error: r.error });
       }
     }
+
+    // Visible progress after each chunk. completed counts every location the
+    // sync has finished trying — succeeded + failed — so the bar still moves
+    // when individual locations error out.
+    await setSyncProgress(userId, {
+      total,
+      completed: result.succeeded + result.failed,
+      status: "running",
+      startedAt,
+    });
   }
+
+  await setSyncProgress(userId, {
+    total,
+    completed: total,
+    status: "complete",
+    startedAt,
+    completedAt: Date.now(),
+  });
 
   return result;
 }
