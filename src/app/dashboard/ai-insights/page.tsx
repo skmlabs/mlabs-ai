@@ -7,7 +7,8 @@ interface InsightsResponse {
   insights?: string;
   cached?: boolean;
   error?: string;
-  regenerateLockedUntilDays?: number;
+  regenerateLockedUntilHours?: number;
+  retryAfter?: number;
 }
 
 interface Section {
@@ -50,7 +51,7 @@ export default function AiInsightsPage() {
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [regenerateBanner, setRegenerateBanner] = useState<string | null>(null);
-  const [regenerateLockedDays, setRegenerateLockedDays] = useState<number | null>(null);
+  const [regenerateLockedHours, setRegenerateLockedHours] = useState<number | null>(null);
   const [activeSection, setActiveSection] = useState<string | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
 
@@ -66,10 +67,10 @@ export default function AiInsightsPage() {
       // the message as a non-blocking banner. Without this branch the user
       // would see a full-page error after clicking Regenerate during cooldown.
       if (res.status === 429) {
-        const msg = j.error ?? "Regenerate is limited to once per week.";
+        const msg = j.error ?? "AI Insights can be regenerated once every 24 hours.";
         setRegenerateBanner(msg);
-        if (typeof j.regenerateLockedUntilDays === "number") {
-          setRegenerateLockedDays(j.regenerateLockedUntilDays);
+        if (typeof j.regenerateLockedUntilHours === "number") {
+          setRegenerateLockedHours(j.regenerateLockedUntilHours);
         }
         return;
       }
@@ -77,7 +78,7 @@ export default function AiInsightsPage() {
       if (!res.ok) throw new Error(j.error ?? `Request failed: ${res.status}`);
       setData(j);
       // Successful regen clears any stale cooldown state.
-      setRegenerateLockedDays(null);
+      setRegenerateLockedHours(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load insights");
     } finally {
@@ -181,17 +182,17 @@ export default function AiInsightsPage() {
           </button>
           <button
             onClick={() => load(true)}
-            disabled={regenerating || loading || regenerateLockedDays !== null}
-            title={regenerateLockedDays !== null
-              ? `Available again in ${regenerateLockedDays} day${regenerateLockedDays === 1 ? "" : "s"}`
+            disabled={regenerating || loading || regenerateLockedHours !== null}
+            title={regenerateLockedHours !== null
+              ? `Available again in ${regenerateLockedHours} hour${regenerateLockedHours === 1 ? "" : "s"}`
               : undefined}
             className="text-xs bg-brand-indigo hover:bg-indigo-600 rounded-md px-3 py-1.5 flex items-center gap-1.5 disabled:opacity-50 text-white font-medium"
           >
             {regenerating ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
             {regenerating
               ? "Regenerating…"
-              : regenerateLockedDays !== null
-                ? `Available in ${regenerateLockedDays}d`
+              : regenerateLockedHours !== null
+                ? `Available in ${regenerateLockedHours}h`
                 : "Regenerate"}
           </button>
         </div>
