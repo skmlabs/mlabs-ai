@@ -6,6 +6,7 @@ import { generateWithGemini } from "@/lib/ai/gemini";
 import {
   canBypassRegenerateGate,
   getCachedInsights,
+  getRegenerateLockBody,
   getRegenerateLockTtl,
   setCachedInsights,
   setRegenerateLock,
@@ -47,7 +48,12 @@ export async function GET(req: NextRequest) {
     if (!force) {
       const cached = await getCachedInsights(user.id, timeRangeDays);
       if (cached) {
-        return NextResponse.json({ insights: cached, cached: true });
+        // The lock body holds the ISO timestamp of the most recent generation
+        // (see setRegenerateLock — written after every successful generation
+        // since this commit). Surfaced to the UI so the page can render
+        // "Last regenerated on X" without a second timestamp source.
+        const lastRegeneratedAt = await getRegenerateLockBody(user.id);
+        return NextResponse.json({ insights: cached, cached: true, lastRegeneratedAt });
       }
     }
 
@@ -64,13 +70,14 @@ export async function GET(req: NextRequest) {
 
     await setCachedInsights(user.id, timeRangeDays, insights);
 
-    // Lock further regenerations for 7 days — only after a successful forced
-    // regen, only for non-SK accounts.
-    if (force && !isSkAccount) {
-      await setRegenerateLock(user.id);
-    }
+    // Always write the lock after a successful generation so the UI has a
+    // consistent "last regenerated" timestamp for both SK (bypassed gate)
+    // and non-SK users (gated). For non-SK, the gate check above still
+    // enforces 24h between forced regenerations.
+    await setRegenerateLock(user.id);
+    const lastRegeneratedAt = new Date().toISOString();
 
-    return NextResponse.json({ insights, cached: false });
+    return NextResponse.json({ insights, cached: false, lastRegeneratedAt });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "AI Insights generation failed";
     console.error("AI Insights generation failed:", msg);
