@@ -1,6 +1,9 @@
 // Upstash REST cache for AI Insights — 7-day TTL.
-// Gracefully no-ops when REDIS_URL/REDIS_TOKEN are missing so the app still
+// Gracefully no-ops when no Redis credentials are resolvable so the app still
 // functions (every request just re-hits Gemini ≈ 30s + ~$0.02 per call).
+// See src/lib/redis/env.ts for the env-var resolution + format validation.
+
+import { resolveRedisRest } from "@/lib/redis/env";
 
 const TTL_SECONDS = 7 * 24 * 60 * 60;
 // Regenerate cooldown is separate from cache TTL — controls "how often a user
@@ -26,10 +29,7 @@ export function canBypassRegenerateGate(email: string | null | undefined): boole
 }
 
 function envPair(): { url: string; token: string } | null {
-  const url = process.env.REDIS_URL;
-  const token = process.env.REDIS_TOKEN;
-  if (!url || !token) return null;
-  return { url: url.replace(/\/+$/, ""), token };
+  return resolveRedisRest();
 }
 
 export async function getCachedInsights(
