@@ -83,6 +83,29 @@ export async function setCachedInsights(
   }
 }
 
+// Returns the lock's stored body (an ISO timestamp written at the moment of
+// the lock-set, see setRegenerateLock) or null if the key is absent. Used by
+// the AI Insights page to render "Last regenerated on X" without introducing
+// a second timestamp source.
+export async function getRegenerateLockBody(userId: string): Promise<string | null> {
+  const env = envPair();
+  if (!env) return null;
+
+  const key = regenerateLockKey(userId);
+  try {
+    const res = await fetch(`${env.url}/get/${encodeURIComponent(key)}`, {
+      headers: { Authorization: `Bearer ${env.token}` },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { result?: string | null };
+    return typeof data.result === "string" ? data.result : null;
+  } catch (e) {
+    console.error("Redis get lock body failed:", e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
 // Returns the remaining cooldown in seconds when a lock is active, else null.
 // Upstash /ttl returns -2 if the key doesn't exist, -1 if it exists without a
 // TTL — both mean "not locked" for our purposes.
