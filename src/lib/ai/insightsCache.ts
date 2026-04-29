@@ -3,7 +3,10 @@
 // functions (every request just re-hits Gemini ≈ 30s + ~$0.02 per call).
 
 const TTL_SECONDS = 7 * 24 * 60 * 60;
-const REGENERATE_LOCK_TTL_SECONDS = 7 * 24 * 60 * 60;
+// Regenerate cooldown is separate from cache TTL — controls "how often a user
+// can trigger fresh generation" rather than "how long the cached output is
+// considered fresh." 24h matches the typical operator cadence.
+const REGENERATE_LOCK_TTL_SECONDS = 24 * 60 * 60;
 
 // Bypass the regenerate cooldown for these accounts (case-insensitive).
 // Founder/operator accounts that need ad-hoc regeneration during demos.
