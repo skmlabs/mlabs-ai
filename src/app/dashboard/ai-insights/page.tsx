@@ -9,6 +9,9 @@ interface InsightsResponse {
   error?: string;
   regenerateLockedUntilHours?: number;
   retryAfter?: number;
+  // ISO timestamp of the last successful generation (read from the regen-lock
+  // body server-side). Hide the subtitle entirely when this is null.
+  lastRegeneratedAt?: string | null;
 }
 
 interface Section {
@@ -168,9 +171,11 @@ export default function AiInsightsPage() {
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-brand-indigo" /> AI Insights
           </h1>
-          <p className="text-xs text-muted mt-1">
-            {data?.cached ? "Cached · regenerate to refresh" : data && !data.cached ? "Fresh" : " "}
-          </p>
+          {data?.lastRegeneratedAt ? (
+            <p className="text-xs text-muted mt-1">
+              Last regenerated on {new Date(data.lastRegeneratedAt).toLocaleString()}
+            </p>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -264,7 +269,7 @@ function LoadingState() {
       <div>
         <div className="text-sm font-medium">Analyzing your locations and competitors…</div>
         <div className="text-xs text-muted mt-1">
-          Gemini 2.5 Pro is generating a fresh brief. This usually takes 20-40 seconds.
+          Generating a fresh brief. This usually takes 20-40 seconds.
           Subsequent loads are cached and instant.
         </div>
       </div>
