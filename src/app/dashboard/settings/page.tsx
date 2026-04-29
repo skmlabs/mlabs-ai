@@ -6,6 +6,7 @@ import { Loader2, Plug, Unplug, RefreshCw, MapPin, CheckCircle2, AlertCircle } f
 
 type ConnectedAccount = { id: string; google_account_email: string; google_account_name: string | null; status: string; last_synced_at: string | null; created_at: string };
 type LocationRow = { id: string; title: string; address: string | null; is_active: boolean; connected_account_id: string; gmb_location_id: string };
+type SyncProgress = { total: number; completed: number; status: "running" | "complete" | "failed" | "idle"; startedAt?: number; completedAt?: number };
 
 export default function SettingsPage() {
   const search = useSearchParams();
@@ -16,6 +17,7 @@ export default function SettingsPage() {
   const [locations, setLocations] = useState<LocationRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncingAccountId, setSyncingAccountId] = useState<string | null>(null);
+  const [syncProgress, setSyncProgress] = useState<SyncProgress | null>(null);
   const [busyLocationId, setBusyLocationId] = useState<string | null>(null);
   const [banner, setBanner] = useState<{ kind: "success" | "error"; msg: string } | null>(
     connected ? { kind: "success", msg: "Google Business Profile connected." }
@@ -36,6 +38,22 @@ export default function SettingsPage() {
 
   async function onSync(accountId: string) {
     setSyncingAccountId(accountId);
+    setSyncProgress({ total: 0, completed: 0, status: "running" });
+
+    // Poll for visible progress while the actual sync request is in flight.
+    // Awaiting the sync response is still the source of truth for "done";
+    // the poller only updates the visible counter. If REDIS_URL/REDIS_TOKEN
+    // aren't set, the poll returns { status: "idle" } and the user sees the
+    // generic "Auto-syncing…" state — graceful degradation.
+    const pollInterval = window.setInterval(async () => {
+      try {
+        const res = await fetch("/api/gmb/sync-progress", { cache: "no-store" });
+        if (!res.ok) return;
+        const j = await res.json() as SyncProgress;
+        if (j.status === "running" || j.status === "complete") setSyncProgress(j);
+      } catch { /* ignore — best-effort poll */ }
+    }, 1000);
+
     try {
       const res = await fetch(`/api/gmb/locations/sync?accountId=${encodeURIComponent(accountId)}`, { method: "POST" });
       const j = await res.json();
@@ -45,7 +63,11 @@ export default function SettingsPage() {
     } catch (e) {
       setBanner({ kind: "error", msg: e instanceof Error ? e.message : "Sync failed" });
     } finally {
+      window.clearInterval(pollInterval);
       setSyncingAccountId(null);
+      // Brief settle: keep "✓ Synced N locations" visible for 2s before clearing
+      // so the user registers the completion state.
+      window.setTimeout(() => setSyncProgress(null), 2000);
     }
   }
 
@@ -121,6 +143,16 @@ export default function SettingsPage() {
                       <Unplug className="h-3.5 w-3.5" /> Disconnect
                     </button>
                   </div>
+                  {/* Visible progress counter — shown only while THIS account is the active sync. */}
+                  {syncingAccountId === a.id && syncProgress ? (
+                    <div className="text-[11px] text-brand-indigo bg-brand-indigo/10 border border-brand-indigo/30 rounded px-2 py-1">
+                      {syncProgress.status === "complete"
+                        ? `✓ Synced ${syncProgress.total} location${syncProgress.total === 1 ? "" : "s"}`
+                        : syncProgress.total > 0
+                          ? `Synced ${syncProgress.completed} of ${syncProgress.total} locations…`
+                          : "Auto-syncing…"}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))}
