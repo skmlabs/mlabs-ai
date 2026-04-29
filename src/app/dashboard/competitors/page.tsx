@@ -215,34 +215,41 @@ export default function CompetitorsPage() {
   async function onExport() {
     if (competitors.length === 0) return;
     const datePart = new Date().toISOString().slice(0, 10);
+
+    // Pre-flatten competitors so each estimate field becomes a top-level
+    // column with a unique key. Without this, exportToExcel's underlying
+    // ExcelJS dedupes columns that share a key (the prior code used
+    // `key: "estimates"` for 5 columns, so only the last — Calibration —
+    // rendered data; Velocity / Est Calls / Est Directions / Est Website
+    // came out blank).
+    const flatRows = competitors.map(c => ({
+      name: c.name,
+      city: c.city,
+      category: c.category,
+      rating: c.rating,
+      total_ratings: c.total_ratings,
+      velocity_per_month: c.estimates.reviewVelocityPerMonth,
+      est_calls_30d: c.estimates.estimatedCalls30d,
+      est_directions_30d: c.estimates.estimatedDirections30d,
+      est_website_30d: c.estimates.estimatedWebsite30d,
+      calibration: c.estimates.calibrationBasis,
+      place_id: c.place_id,
+      google_maps_uri: c.google_maps_uri,
+    }));
+
     await exportToExcel(
-      competitors,
+      flatRows,
       [
         { key: "name", label: "Name" },
         { key: "city", label: "City", format: v => typeof v === "string" ? v : "" },
         { key: "category", label: "Category", format: v => typeof v === "string" ? v : "" },
         { key: "rating", label: "Rating", format: v => typeof v === "number" ? v.toFixed(1) : "—" },
         { key: "total_ratings", label: "Total Reviews", format: v => typeof v === "number" ? v : "—" },
-        { key: "estimates", label: "Velocity (per month)", format: v => {
-          const e = v as Estimates | undefined;
-          return e ? e.reviewVelocityPerMonth : "—";
-        } },
-        { key: "estimates", label: "Est Calls 30d", format: v => {
-          const e = v as Estimates | undefined;
-          return e?.estimatedCalls30d ?? "—";
-        } },
-        { key: "estimates", label: "Est Directions 30d", format: v => {
-          const e = v as Estimates | undefined;
-          return e?.estimatedDirections30d ?? "—";
-        } },
-        { key: "estimates", label: "Est Website 30d", format: v => {
-          const e = v as Estimates | undefined;
-          return e?.estimatedWebsite30d ?? "—";
-        } },
-        { key: "estimates", label: "Calibration", format: v => {
-          const e = v as Estimates | undefined;
-          return e?.calibrationBasis ?? "none";
-        } },
+        { key: "velocity_per_month", label: "Velocity (per month)", format: v => typeof v === "number" ? v : "—" },
+        { key: "est_calls_30d", label: "Est Calls 30d", format: v => typeof v === "number" ? v : "—" },
+        { key: "est_directions_30d", label: "Est Directions 30d", format: v => typeof v === "number" ? v : "—" },
+        { key: "est_website_30d", label: "Est Website 30d", format: v => typeof v === "number" ? v : "—" },
+        { key: "calibration", label: "Calibration", format: v => typeof v === "string" ? v : "none" },
         { key: "place_id", label: "Place ID" },
         { key: "google_maps_uri", label: "Google Maps URL", format: v => typeof v === "string" ? v : "" },
       ],
