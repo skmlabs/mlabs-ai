@@ -1,13 +1,15 @@
 // Per-user sync progress in Upstash Redis. Same fetch-based pattern as
 // src/lib/ai/insightsCache.ts so we don't add a new dependency. Gracefully
-// no-ops when REDIS_URL/REDIS_TOKEN are missing — the UI's polling endpoint
+// no-ops when no Redis credentials are resolvable — the UI's polling endpoint
 // returns { status: "idle" } in that case and the page falls back to its
-// awaited spinner.
+// awaited spinner. See src/lib/redis/env.ts for env-var resolution.
 //
 // Single key per user (last writer wins). Today the only writer is
 // syncOwnedLocationsForUser (Places sync); reviews/metrics syncs run in
 // parallel but don't touch this key. Good enough as a visible-progress proxy
 // for the most parallelizable phase.
+
+import { resolveRedisRest } from "@/lib/redis/env";
 
 const RUNNING_TTL_SECONDS = 600;   // 10-min safety in case the route crashes
 const COMPLETE_TTL_SECONDS = 60;   // tail TTL — UI polls a few times after done
@@ -28,10 +30,7 @@ function progressKey(userId: string): string {
 }
 
 function envPair(): { url: string; token: string } | null {
-  const url = process.env.REDIS_URL;
-  const token = process.env.REDIS_TOKEN;
-  if (!url || !token) return null;
-  return { url: url.replace(/\/+$/, ""), token };
+  return resolveRedisRest();
 }
 
 export async function getSyncProgress(userId: string): Promise<SyncProgress | null> {
