@@ -34,10 +34,11 @@ export async function GET(req: NextRequest) {
   if (force && !isSkAccount) {
     const lockTtl = await getRegenerateLockTtl(user.id);
     if (lockTtl !== null) {
-      const daysRemaining = Math.max(1, Math.ceil(lockTtl / 86400));
+      const hoursRemaining = Math.max(1, Math.ceil(lockTtl / 3600));
       return NextResponse.json({
-        error: `Regenerate is limited to once per week. Available again in ${daysRemaining} day${daysRemaining === 1 ? "" : "s"}.`,
-        regenerateLockedUntilDays: daysRemaining,
+        error: `AI Insights can be regenerated once every 24 hours. Try again in ${hoursRemaining} hour${hoursRemaining === 1 ? "" : "s"}.`,
+        retryAfter: lockTtl,
+        regenerateLockedUntilHours: hoursRemaining,
       }, { status: 429 });
     }
   }
