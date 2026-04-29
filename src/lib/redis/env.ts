@@ -75,3 +75,45 @@ export async function pingRedisRest(): Promise<{ ok: boolean; source: string | n
     return { ok: false, source: env.source, error: e instanceof Error ? e.message : String(e) };
   }
 }
+
+// Diagnostic: which Redis-shaped env var names are visible in the runtime,
+// and (for those that are) what URL protocol prefix do they have. Returns
+// names + format only — never the values themselves.
+export interface RedisEnvDiagnostic {
+  redisLikeKeys: string[];
+  candidates: Array<{
+    source: string;
+    urlPresent: boolean;
+    tokenPresent: boolean;
+    urlFormat: "https" | "redis" | "other" | null;
+  }>;
+}
+
+function urlFormat(url: string | undefined): "https" | "redis" | "other" | null {
+  if (!url) return null;
+  const t = url.trim();
+  if (/^https:\/\//i.test(t)) return "https";
+  if (/^redis:\/\//i.test(t)) return "redis";
+  return "other";
+}
+
+export function diagnoseRedisEnv(): RedisEnvDiagnostic {
+  const redisLikeKeys = Object.keys(process.env)
+    .filter(k => /redis|upstash|^kv_/i.test(k))
+    .sort();
+
+  const pairs: Array<{ source: string; urlVar: string; tokenVar: string }> = [
+    { source: "REDIS_URL/REDIS_TOKEN", urlVar: "REDIS_URL", tokenVar: "REDIS_TOKEN" },
+    { source: "UPSTASH_REDIS_REST_URL/UPSTASH_REDIS_REST_TOKEN", urlVar: "UPSTASH_REDIS_REST_URL", tokenVar: "UPSTASH_REDIS_REST_TOKEN" },
+    { source: "KV_REST_API_URL/KV_REST_API_TOKEN", urlVar: "KV_REST_API_URL", tokenVar: "KV_REST_API_TOKEN" },
+  ];
+
+  const candidates = pairs.map(p => ({
+    source: p.source,
+    urlPresent: typeof process.env[p.urlVar] === "string" && process.env[p.urlVar]!.length > 0,
+    tokenPresent: typeof process.env[p.tokenVar] === "string" && process.env[p.tokenVar]!.length > 0,
+    urlFormat: urlFormat(process.env[p.urlVar]),
+  }));
+
+  return { redisLikeKeys, candidates };
+}
