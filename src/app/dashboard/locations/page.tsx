@@ -10,7 +10,16 @@ import { exportToExcel } from "@/lib/exportExcel";
 import { normalizeRangeKey, type DateRangeKey } from "@/lib/dateRange";
 import { timeAgo } from "@/lib/timeAgo";
 import { OnboardingGate } from "@/components/OnboardingGate";
-import { AlertTriangle, Loader2, MapPin, RefreshCw, Star } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Loader2, MapPin, RefreshCw, Star } from "lucide-react";
+
+type SyncProgress = {
+  status: "idle" | "running" | "complete" | "failed";
+  total?: number;
+  completed?: number;
+  startedAt?: number;
+  completedAt?: number;
+  error?: string;
+};
 
 type Row = {
   id: string;
@@ -57,6 +66,7 @@ function LocationsInner() {
   const locationId = search.get("locationId");
   const customStart = search.get("start") ?? undefined;
   const customEnd = search.get("end") ?? undefined;
+  const justConnected = search.get("just_connected") === "1";
 
   const [rows, setRows] = useState<Row[]>([]);
   const [meta, setMeta] = useState<{ label: string; start: string; end: string } | null>(null);
@@ -67,9 +77,17 @@ function LocationsInner() {
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncBanner, setSyncBanner] = useState<string | null>(null);
+  // Post-OAuth (or any in-flight server-side sync): poll progress + re-fetch the
+  // table so locations stream into the grid as syncOwnedLocationsForUser writes
+  // them. `justCompleted` keeps the "Sync complete" pill visible briefly before
+  // we drop the banner entirely.
+  const [progress, setProgress] = useState<SyncProgress | null>(justConnected ? { status: "running", total: 0, completed: 0 } : null);
+  const [justCompleted, setJustCompleted] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  // `silent: true` skips the top-level spinner so the polling effect can
+  // re-fetch the grid every 2s without flashing the "Loading…" state.
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setLoading(true);
     try {
       const qs = new URLSearchParams({ range });
       if (range === "custom" && customStart && customEnd) {
@@ -83,7 +101,7 @@ function LocationsInner() {
       setMeta(j.range);
       setPlacesMeta(j.places ?? null);
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, [range, customStart, customEnd]);
   useEffect(() => { load(); }, [load]);
@@ -98,6 +116,62 @@ function LocationsInner() {
     } catch { /* non-blocking */ }
   }, []);
   useEffect(() => { loadSyncStatus(); }, [loadSyncStatus]);
+
+  // Post-OAuth: poll /api/gmb/sync-progress every 2s and silently re-fetch the
+  // locations grid between polls so rows stream in as the server-side
+  // runFullSyncForAccount writes them. Stops on `complete` or `failed`, settles
+  // for 2.5s to show the success pill, then strips `just_connected` from the
+  // URL so a reload doesn't re-trigger the polling loop.
+  useEffect(() => {
+    if (!justConnected) return;
+    let cancelled = false;
+    let intervalId: number | null = null;
+
+    const stop = () => {
+      if (intervalId != null) {
+        window.clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    const tick = async () => {
+      if (cancelled) return;
+      let snap: SyncProgress | null = null;
+      try {
+        const res = await fetch("/api/gmb/sync-progress", { cache: "no-store" });
+        if (res.ok) snap = await res.json() as SyncProgress;
+      } catch { /* swallow — best-effort poll */ }
+      if (cancelled) return;
+      if (snap) setProgress(snap);
+      await load({ silent: true });
+      await loadSyncStatus();
+      if (cancelled) return;
+      if (snap && (snap.status === "complete" || snap.status === "failed")) {
+        stop();
+        setJustCompleted(snap.status === "complete");
+        window.setTimeout(() => {
+          if (cancelled) return;
+          setJustCompleted(false);
+          setProgress(null);
+          const p = new URLSearchParams(search.toString());
+          p.delete("just_connected");
+          router.replace(`${pathname}${p.toString() ? "?" + p.toString() : ""}`);
+        }, 2500);
+      }
+    };
+
+    tick();
+    intervalId = window.setInterval(tick, 2000);
+
+    return () => {
+      cancelled = true;
+      stop();
+    };
+    // We want this effect to fire once when justConnected flips true. `load`
+    // and `loadSyncStatus` are stable useCallbacks and `search`/`pathname`/
+    // `router` don't meaningfully change during this loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [justConnected]);
 
   async function syncNow() {
     setSyncing(true); setSyncBanner(null);
@@ -178,11 +252,34 @@ function LocationsInner() {
     );
   }
 
-  // No GMB-synced locations yet → onboarding takes over the whole page.
-  if (!loading && rows.length === 0) return <OnboardingGate />;
+  const isSyncing = justConnected || progress?.status === "running" || justCompleted;
+  // No GMB-synced locations yet → onboarding takes over the whole page. But if
+  // a fresh OAuth-triggered sync is in flight, keep the page chrome so the
+  // sticky "Syncing locations…" banner can show + rows can stream in.
+  if (!loading && rows.length === 0 && !isSyncing) return <OnboardingGate />;
 
   return (
     <div className="space-y-6">
+      {isSyncing ? (
+        <div className="sticky top-0 z-10 bg-brand-indigo/10 border border-brand-indigo/30 text-brand-indigo rounded-lg px-4 py-3 text-sm flex items-center gap-2">
+          {justCompleted || progress?.status === "complete" ? (
+            <>
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span>Sync complete — {progress?.total ?? rows.length} location{(progress?.total ?? rows.length) === 1 ? "" : "s"} ready.</span>
+            </>
+          ) : (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+              <span>
+                {progress && (progress.total ?? 0) > 0
+                  ? `Syncing locations… (${progress.completed ?? 0} of ${progress.total})`
+                  : "Syncing locations…"}
+              </span>
+            </>
+          )}
+        </div>
+      ) : null}
+
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold">My Locations</h1>
@@ -218,9 +315,15 @@ function LocationsInner() {
       {loading ? (
         <div className="flex items-center gap-2 text-muted text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
       ) : rows.length === 0 ? (
-        <div className="bg-bg-card border border-bg-border rounded-xl p-6 text-sm text-muted">
-          No locations yet. Go to Settings to add your first location.
-        </div>
+        isSyncing ? (
+          <div className="bg-bg-card border border-bg-border rounded-xl p-6 text-sm text-muted">
+            Hang tight — we&apos;re pulling your locations from Google. They&apos;ll appear here as they sync.
+          </div>
+        ) : (
+          <div className="bg-bg-card border border-bg-border rounded-xl p-6 text-sm text-muted">
+            No locations yet. Go to Settings to add your first location.
+          </div>
+        )
       ) : (
         <div className="bg-bg-card border border-bg-border rounded-xl overflow-hidden">
           <div className="overflow-x-auto">

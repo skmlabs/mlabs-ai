@@ -2,7 +2,9 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { exchangeCodeForTokens, getGoogleUserInfo } from "@/lib/gmb/oauth";
 import { encrypt } from "@/lib/crypto";
-import { NextResponse, type NextRequest } from "next/server";
+import { runFullSyncForAccount } from "@/lib/gmb/runFullSync";
+import { setSyncProgress } from "@/lib/sync/progress";
+import { NextResponse, after, type NextRequest } from "next/server";
 
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
@@ -44,7 +46,7 @@ export async function GET(request: NextRequest) {
     const encryptedRefresh = encrypt(tokens.refresh_token);
     const scopesArray = tokens.scope.split(" ").filter(Boolean);
 
-    const { error: upsertErr } = await admin
+    const { data: upserted, error: upsertErr } = await admin
       .from("connected_accounts")
       .upsert(
         {
@@ -59,13 +61,41 @@ export async function GET(request: NextRequest) {
           last_synced_at: null,
         },
         { onConflict: "user_id,provider,google_account_email" }
-      );
+      )
+      .select("id")
+      .single();
 
-    if (upsertErr) {
-      return NextResponse.redirect(`${origin}/dashboard/settings?gmb_error=${encodeURIComponent(upsertErr.message)}`);
+    if (upsertErr || !upserted) {
+      const msg = upsertErr?.message ?? "upsert_failed";
+      return NextResponse.redirect(`${origin}/dashboard/settings?gmb_error=${encodeURIComponent(msg)}`);
     }
 
-    const res = NextResponse.redirect(`${origin}/dashboard/settings?gmb_connected=1`);
+    // Prime the Redis progress key BEFORE redirecting so the locations page,
+    // which starts polling on mount, sees `status: "running"` immediately and
+    // doesn't flash an "idle" / OnboardingGate state. The real total/completed
+    // numbers are filled in by syncOwnedLocationsForUser once it knows the
+    // location count. Safe no-op if Redis isn't configured.
+    await setSyncProgress(user.id, {
+      total: 0,
+      completed: 0,
+      status: "running",
+      startedAt: Date.now(),
+    });
+
+    // Kick off the full sync (locations upsert + Places + metrics + reviews)
+    // in the background. `after()` keeps the work alive past the redirect
+    // response on Vercel, so the unawaited promise isn't killed when this
+    // serverless function returns.
+    const accountId = upserted.id as string;
+    after(async () => {
+      try {
+        await runFullSyncForAccount(user.id, accountId);
+      } catch (e) {
+        console.error("Auto-sync after OAuth failed:", e instanceof Error ? e.message : e);
+      }
+    });
+
+    const res = NextResponse.redirect(`${origin}/dashboard/locations?just_connected=1`);
     res.cookies.delete("gmb_oauth_state");
     res.cookies.delete("gmb_oauth_redirect_uri");
     return res;
