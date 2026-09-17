@@ -70,6 +70,8 @@ export async function syncCompetitorsForUser(userId: string): Promise<SyncResult
         google_maps_uri: details.googleMapsUri ?? null,
         rating: details.rating ?? null,
         total_ratings: details.userRatingCount ?? null,
+        phone: details.nationalPhoneNumber ?? details.internationalPhoneNumber ?? null,
+        website: details.websiteUri ?? null,
         recent_reviews: reviews,
         last_synced_at: new Date().toISOString(),
         sync_status: "success",

@@ -34,6 +34,9 @@ export interface PlaceDetails {
   googleMapsUri?: string;
   primaryType?: string;
   primaryTypeDisplayName?: { text: string; languageCode?: string };
+  nationalPhoneNumber?: string;
+  internationalPhoneNumber?: string;
+  websiteUri?: string;
 }
 
 export interface PlaceSearchResult {
@@ -69,6 +72,12 @@ const DETAILS_FIELD_MASK = [
   "primaryType",
   "primaryTypeDisplayName",
   "googleMapsUri",
+  // Contact fields — Enterprise SKU on Place Details. Fetched once per
+  // competitor on add and refreshed weekly by the sync cron, so the cost is
+  // per-competitor, not per-keystroke.
+  "nationalPhoneNumber",
+  "internationalPhoneNumber",
+  "websiteUri",
 ].join(",");
 
 const SEARCH_FIELD_MASK = [
@@ -157,6 +166,20 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
 export interface PlaceSearchResultExtended extends PlaceSearchResult {
   primaryTypeDisplayName?: { text: string };
   googleMapsUri?: string;
+  /** Only populated when the caller opts in via `includeWebsite` (see below). */
+  websiteUri?: string;
+}
+
+export interface CompetitorSearchOptions {
+  /**
+   * Adds `places.websiteUri` to the field mask so the "has a website /
+   * no website" filter can be applied. This upgrades the Text Search call
+   * from the Pro SKU to Enterprise, so it is opt-in: the UI only sets it
+   * when the user actually picks a website filter.
+   */
+  includeWebsite?: boolean;
+  /** Places caps this at 20. */
+  maxResults?: number;
 }
 
 interface SearchTextBodyExtended extends SearchTextBody {
@@ -178,8 +201,10 @@ const SEARCH_FIELD_MASK_EXTENDED = [
 export async function searchPlacesForCompetitor(
   query: string,
   locationBias?: { lat: number; lng: number; radiusMeters?: number },
+  options: CompetitorSearchOptions = {},
 ): Promise<PlaceSearchResultExtended[]> {
-  const body: SearchTextBodyExtended = { textQuery: query, maxResultCount: 10 };
+  const maxResultCount = Math.min(Math.max(options.maxResults ?? 20, 1), 20);
+  const body: SearchTextBodyExtended = { textQuery: query, maxResultCount };
   if (locationBias) {
     body.locationBias = {
       circle: {
@@ -194,7 +219,9 @@ export async function searchPlacesForCompetitor(
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": getApiKey(),
-      "X-Goog-FieldMask": SEARCH_FIELD_MASK_EXTENDED,
+      "X-Goog-FieldMask": options.includeWebsite
+        ? `${SEARCH_FIELD_MASK_EXTENDED},places.websiteUri`
+        : SEARCH_FIELD_MASK_EXTENDED,
     },
     body: JSON.stringify(body),
   });
