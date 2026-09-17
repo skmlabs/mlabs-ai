@@ -1,28 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ExportButton } from "@/components/ExportButton";
 import { OnboardingGate } from "@/components/OnboardingGate";
 import { exportToExcel } from "@/lib/exportExcel";
 import { timeAgo } from "@/lib/timeAgo";
 import {
   AlertCircle, CheckCircle2, ExternalLink, Eye, Globe, Loader2, MapPin,
-  Phone, Plus, RefreshCw, Search, SlidersHorizontal, Star, Trash2, X,
+  Phone, RefreshCw, Search, Star, Trash2, X,
 } from "lucide-react";
-
-type PlaceSearchResultExtended = {
-  id: string;
-  displayName: { text: string };
-  formattedAddress: string;
-  location: { latitude: number; longitude: number };
-  rating?: number;
-  userRatingCount?: number;
-  primaryType?: string;
-  primaryTypeDisplayName?: { text: string };
-  googleMapsUri?: string;
-  websiteUri?: string;
-};
 
 type CompetitorReview = {
   publishTime?: string;
@@ -70,32 +58,6 @@ type Competitor = {
 
 type OwnedLocation = { id: string; place_id: string | null };
 
-type WebsiteFilter = "any" | "has" | "none";
-
-type Filters = {
-  city: string;
-  minRating: string;    // "" | "3" | "3.5" | "4" | "4.5"
-  minReviews: string;
-  maxReviews: string;
-  website: WebsiteFilter;
-};
-
-const EMPTY_FILTERS: Filters = {
-  city: "",
-  minRating: "",
-  minReviews: "",
-  maxReviews: "",
-  website: "any",
-};
-
-const RATING_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: "", label: "Any rating" },
-  { value: "3", label: "3.0+" },
-  { value: "3.5", label: "3.5+" },
-  { value: "4", label: "4.0+" },
-  { value: "4.5", label: "4.5+" },
-];
-
 function fmt(n: number | null): string {
   if (n == null) return "—";
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
@@ -115,36 +77,17 @@ function prettyHost(url: string): string {
   }
 }
 
-function countActiveFilters(f: Filters): number {
-  let n = 0;
-  if (f.city.trim()) n += 1;
-  if (f.minRating) n += 1;
-  if (f.minReviews.trim()) n += 1;
-  if (f.maxReviews.trim()) n += 1;
-  if (f.website !== "any") n += 1;
-  return n;
-}
-
 export default function CompetitorsPage() {
+  const router = useRouter();
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
   const [ownedLocations, setOwnedLocations] = useState<OwnedLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<{ kind: "success" | "error"; msg: string } | null>(null);
 
   const [query, setQuery] = useState("");
-  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
-  const [showFilters, setShowFilters] = useState(false);
-  const [searchResults, setSearchResults] = useState<PlaceSearchResultExtended[]>([]);
-  const [searchMeta, setSearchMeta] = useState<{ total: number; filtered: number } | null>(null);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
-  const searchRef = useRef<HTMLDivElement | null>(null);
 
-  const [addingId, setAddingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [modalCompetitor, setModalCompetitor] = useState<Competitor | null>(null);
-
-  const activeFilterCount = countActiveFilters(filters);
 
   const ownedWithPlaceId = useMemo(
     () => ownedLocations.filter(l => l.place_id),
@@ -179,84 +122,12 @@ export default function CompetitorsPage() {
     return () => window.clearTimeout(id);
   }, [banner]);
 
-  // Debounced search. Re-runs whenever the keyword OR any advanced filter
-  // changes, so tweaking a filter refreshes the dropdown in place.
-  useEffect(() => {
-    const trimmed = query.trim();
-    if (trimmed.length < 3) {
-      setSearchResults([]);
-      setSearchMeta(null);
-      setSearchLoading(false);
-      return;
-    }
-    setSearchLoading(true);
-    const id = window.setTimeout(async () => {
-      try {
-        const params = new URLSearchParams({ q: trimmed });
-        if (filters.city.trim()) params.set("city", filters.city.trim());
-        if (filters.minRating) params.set("minRating", filters.minRating);
-        if (filters.minReviews.trim()) params.set("minReviews", filters.minReviews.trim());
-        if (filters.maxReviews.trim()) params.set("maxReviews", filters.maxReviews.trim());
-        if (filters.website !== "any") params.set("website", filters.website);
-
-        const res = await fetch(`/api/competitors/search?${params.toString()}`);
-        const j = await res.json() as {
-          results?: PlaceSearchResultExtended[];
-          total?: number;
-          filtered?: number;
-        };
-        setSearchResults(j.results ?? []);
-        setSearchMeta(
-          typeof j.total === "number" && typeof j.filtered === "number"
-            ? { total: j.total, filtered: j.filtered }
-            : null,
-        );
-        setSearchOpen(true);
-      } catch { /* ignore — silent failure on autocomplete */ }
-      finally { setSearchLoading(false); }
-    }, 400);
-    return () => window.clearTimeout(id);
-  }, [query, filters]);
-
-  // Click-outside closes dropdown.
-  useEffect(() => {
-    function onDocClick(e: MouseEvent) {
-      if (!searchRef.current) return;
-      if (!searchRef.current.contains(e.target as Node)) setSearchOpen(false);
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, []);
-
-  function setFilter<K extends keyof Filters>(key: K, value: Filters[K]) {
-    setFilters(prev => ({ ...prev, [key]: value }));
-  }
-
-  async function addCompetitor(place: PlaceSearchResultExtended) {
-    setAddingId(place.id); setBanner(null);
-    try {
-      const res = await fetch("/api/competitors", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ placeId: place.id }),
-      });
-      const j = await res.json() as { competitor?: Competitor; error?: string };
-      if (!res.ok) {
-        const msg = res.status === 409 ? "Already tracking this competitor" : (j.error ?? "Failed to add");
-        setBanner({ kind: "error", msg });
-        return;
-      }
-      setBanner({ kind: "success", msg: `Added ${place.displayName.text}` });
-      // Keep the query and filters so several competitors can be added from
-      // one result set — just drop the row that was added.
-      setSearchResults(prev => prev.filter(r => r.id !== place.id));
-      // Refresh full list so estimates re-compute with the new competitor included.
-      await load();
-    } catch (e) {
-      setBanner({ kind: "error", msg: e instanceof Error ? e.message : "Failed to add" });
-    } finally {
-      setAddingId(null);
-    }
+  // The keyword box is a shortcut into the dedicated search page — that page
+  // owns the filters, pagination and the add flow.
+  function goToSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const q = query.trim();
+    router.push(`/dashboard/competitors/search${q ? `?q=${encodeURIComponent(q)}` : ""}`);
   }
 
   async function removeCompetitor(c: Competitor) {
@@ -340,184 +211,29 @@ export default function CompetitorsPage() {
         <ExportButton onClick={onExport} label="Export to Excel" disabled={competitors.length === 0} />
       </div>
 
-      {/* Search + advanced filters — disabled until the user has at least one
-          owned location with a place_id. */}
-      <div ref={searchRef} className="relative">
-        <div className="flex items-stretch gap-2">
-          <div className={`flex-1 flex items-center gap-2 bg-bg-card border border-bg-border rounded-lg px-3 py-2 ${!hasOwnedWithPlaceId ? "opacity-60" : ""}`}>
-            <Search className="h-4 w-4 text-muted shrink-0" />
-            <input
-              type="text"
-              value={query}
-              onChange={e => { setQuery(e.target.value); setSearchOpen(true); }}
-              onFocus={() => setSearchOpen(true)}
-              placeholder={hasOwnedWithPlaceId ? "Search by keyword — e.g. dental clinic…" : "Add an owned location first to enable competitor search"}
-              disabled={!hasOwnedWithPlaceId}
-              className="flex-1 bg-transparent text-sm placeholder:text-muted focus:outline-none disabled:cursor-not-allowed"
-            />
-            {searchLoading ? <Loader2 className="h-4 w-4 animate-spin text-muted" /> : null}
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowFilters(v => !v)}
+      {/* Keyword box is a shortcut into the search page, which owns filters,
+          pagination and the add flow. */}
+      <form onSubmit={goToSearch} className="flex items-stretch gap-2">
+        <div className={`flex-1 flex items-center gap-2 bg-bg-card border border-bg-border rounded-lg px-3 py-2 ${!hasOwnedWithPlaceId ? "opacity-60" : ""}`}>
+          <Search className="h-4 w-4 text-muted shrink-0" />
+          <input
+            type="text"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder={hasOwnedWithPlaceId ? "Search for competitors — e.g. dental clinic" : "Add an owned location first to enable competitor search"}
             disabled={!hasOwnedWithPlaceId}
-            aria-expanded={showFilters}
-            className={`shrink-0 inline-flex items-center gap-2 px-3 py-2 rounded-lg border text-sm transition disabled:opacity-60 disabled:cursor-not-allowed ${
-              showFilters || activeFilterCount > 0
-                ? "bg-brand-indigo/10 border-brand-indigo/40 text-brand-indigo"
-                : "bg-bg-card border-bg-border text-muted hover:text-white"
-            }`}
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-            <span className="hidden sm:inline">Filters</span>
-            {activeFilterCount > 0 ? (
-              <span className="bg-brand-indigo text-white rounded-full px-1.5 text-[10px] font-semibold leading-4">
-                {activeFilterCount}
-              </span>
-            ) : null}
-          </button>
+            className="flex-1 bg-transparent text-sm placeholder:text-muted focus:outline-none disabled:cursor-not-allowed"
+          />
         </div>
-
-        {showFilters ? (
-          <div className="mt-2 bg-bg-card border border-bg-border rounded-lg p-4">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-              <label className="block">
-                <span className="block text-[11px] uppercase tracking-wider text-muted mb-1">City</span>
-                <input
-                  type="text"
-                  value={filters.city}
-                  onChange={e => setFilter("city", e.target.value)}
-                  placeholder="e.g. Gurgaon"
-                  className="w-full bg-bg border border-bg-border rounded-md px-2.5 py-1.5 text-sm placeholder:text-muted focus:outline-none focus:border-brand-indigo"
-                />
-              </label>
-
-              <label className="block">
-                <span className="block text-[11px] uppercase tracking-wider text-muted mb-1">Rating</span>
-                <select
-                  value={filters.minRating}
-                  onChange={e => setFilter("minRating", e.target.value)}
-                  className="w-full bg-bg border border-bg-border rounded-md px-2.5 py-1.5 text-sm focus:outline-none focus:border-brand-indigo"
-                >
-                  {RATING_OPTIONS.map(o => (
-                    <option key={o.value || "any"} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="block">
-                <span className="block text-[11px] uppercase tracking-wider text-muted mb-1">Min reviews</span>
-                <input
-                  type="number"
-                  min={0}
-                  value={filters.minReviews}
-                  onChange={e => setFilter("minReviews", e.target.value)}
-                  placeholder="0"
-                  className="w-full bg-bg border border-bg-border rounded-md px-2.5 py-1.5 text-sm placeholder:text-muted focus:outline-none focus:border-brand-indigo"
-                />
-              </label>
-
-              <label className="block">
-                <span className="block text-[11px] uppercase tracking-wider text-muted mb-1">Max reviews</span>
-                <input
-                  type="number"
-                  min={0}
-                  value={filters.maxReviews}
-                  onChange={e => setFilter("maxReviews", e.target.value)}
-                  placeholder="Any"
-                  className="w-full bg-bg border border-bg-border rounded-md px-2.5 py-1.5 text-sm placeholder:text-muted focus:outline-none focus:border-brand-indigo"
-                />
-              </label>
-
-              <label className="block">
-                <span className="block text-[11px] uppercase tracking-wider text-muted mb-1">Website</span>
-                <select
-                  value={filters.website}
-                  onChange={e => setFilter("website", e.target.value as WebsiteFilter)}
-                  className="w-full bg-bg border border-bg-border rounded-md px-2.5 py-1.5 text-sm focus:outline-none focus:border-brand-indigo"
-                >
-                  <option value="any">Any</option>
-                  <option value="has">Has a website</option>
-                  <option value="none">No website</option>
-                </select>
-              </label>
-            </div>
-
-            <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
-              <span className="text-[11px] text-muted">
-                Filters apply to the Google results above. City also narrows the search itself.
-              </span>
-              <button
-                type="button"
-                onClick={() => setFilters(EMPTY_FILTERS)}
-                disabled={activeFilterCount === 0}
-                className="text-xs text-muted hover:text-white disabled:opacity-40 disabled:cursor-not-allowed inline-flex items-center gap-1"
-              >
-                <X className="h-3.5 w-3.5" /> Clear all
-              </button>
-            </div>
-          </div>
-        ) : null}
-
-        {searchOpen && query.trim().length >= 3 ? (
-          <div className="absolute z-30 left-0 right-0 mt-1 bg-bg-card border border-bg-border rounded-lg shadow-lg max-h-[400px] overflow-y-auto">
-            {searchLoading && searchResults.length === 0 ? (
-              <div className="p-4 text-xs text-muted flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> Searching…</div>
-            ) : searchResults.length === 0 ? (
-              <div className="p-4 text-xs text-muted">
-                {searchMeta && searchMeta.total > 0
-                  ? `No matches — ${searchMeta.total} result${searchMeta.total === 1 ? "" : "s"} were filtered out. Try relaxing the filters.`
-                  : "No matches."}
-              </div>
-            ) : (
-              <>
-                {searchMeta && searchMeta.filtered < searchMeta.total ? (
-                  <div className="px-4 py-2 text-[11px] text-muted border-b border-bg-border">
-                    Showing {searchMeta.filtered} of {searchMeta.total} results after filters
-                  </div>
-                ) : null}
-                <ul className="divide-y divide-bg-border">
-                  {searchResults.map(r => {
-                    const alreadyTracked = competitors.some(c => c.place_id === r.id);
-                    return (
-                      <li key={r.id}>
-                        <button
-                          onClick={() => !alreadyTracked && addCompetitor(r)}
-                          disabled={alreadyTracked || addingId === r.id}
-                          className="w-full text-left px-4 py-3 hover:bg-bg disabled:opacity-50 disabled:cursor-not-allowed flex items-start gap-3"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="text-sm font-medium truncate">{r.displayName.text}</div>
-                            <div className="text-[11px] text-muted truncate">{r.formattedAddress}</div>
-                            <div className="text-[11px] text-muted mt-0.5 flex items-center gap-2 flex-wrap">
-                              {r.primaryTypeDisplayName?.text ? <span>{r.primaryTypeDisplayName.text}</span> : null}
-                              {typeof r.rating === "number" ? (
-                                <span className="inline-flex items-center gap-0.5 text-amber-300">
-                                  <Star className="h-3 w-3 fill-amber-300" /> {r.rating.toFixed(1)}
-                                  {typeof r.userRatingCount === "number" ? <span className="text-muted ml-1">({r.userRatingCount.toLocaleString()})</span> : null}
-                                </span>
-                              ) : null}
-                              {filters.website !== "any" ? (
-                                <span className="inline-flex items-center gap-1">
-                                  <Globe className="h-3 w-3" />
-                                  {r.websiteUri ? prettyHost(r.websiteUri) : "No website"}
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-                          <div className="text-xs text-brand-indigo shrink-0 flex items-center gap-1">
-                            {addingId === r.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : alreadyTracked ? "Tracked" : <><Plus className="h-3.5 w-3.5" /> Add</>}
-                          </div>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              </>
-            )}
-          </div>
-        ) : null}
-      </div>
+        <button
+          type="submit"
+          disabled={!hasOwnedWithPlaceId}
+          className="shrink-0 inline-flex items-center gap-2 bg-brand-indigo hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-lg text-sm font-medium text-white"
+        >
+          <Search className="h-4 w-4" />
+          <span className="hidden sm:inline">Find competitors</span>
+        </button>
+      </form>
 
       {banner ? (
         <div className={`rounded-lg px-4 py-2.5 text-sm flex items-start gap-2 ${
@@ -545,7 +261,10 @@ export default function CompetitorsPage() {
         </div>
       ) : competitors.length === 0 ? (
         <div className="bg-bg-card border border-bg-border rounded-xl p-8 text-center text-sm text-muted">
-          Track competitors to benchmark your locations. Use the search bar above to find businesses to add.
+          Track competitors to benchmark your locations.{" "}
+          <Link href="/dashboard/competitors/search" className="text-brand-indigo hover:underline">
+            Search for businesses to add
+          </Link>.
         </div>
       ) : (
         <div className="bg-bg-card border border-bg-border rounded-xl overflow-hidden">

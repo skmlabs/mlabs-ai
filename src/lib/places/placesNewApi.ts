@@ -158,9 +158,10 @@ export async function getPlaceDetails(placeId: string): Promise<PlaceDetails> {
 }
 
 // ----------------------------------------------------------------------------
-// Phase 5B Session 3: extended search used by the competitor add UI. Returns
-// up to 10 results with a richer field mask (display name + maps URI) so the
-// autocomplete dropdown can render a useful card.
+// Extended search used by the competitor search page. Returns one page of up
+// to 20 results with a richer field mask (display name + maps URI), plus a
+// nextPageToken so the UI can pull further pages on demand. Text Search (New)
+// serves a maximum of 60 results across 3 pages.
 // ----------------------------------------------------------------------------
 
 export interface PlaceSearchResultExtended extends PlaceSearchResult {
@@ -178,12 +179,37 @@ export interface CompetitorSearchOptions {
    * when the user actually picks a website filter.
    */
   includeWebsite?: boolean;
-  /** Places caps this at 20. */
-  maxResults?: number;
+  /** Places caps this at 20 per page. */
+  pageSize?: number;
+  /**
+   * `nextPageToken` from a previous call. Text Search (New) serves at most
+   * 60 results across 3 pages, and every page is a separately billed
+   * request — hence the explicit "Load more" in the UI rather than
+   * auto-paging.
+   *
+   * Google requires the rest of the request to be identical when a
+   * pageToken is supplied, so callers must pass the same query/bias/type.
+   */
+  pageToken?: string;
+  /**
+   * A Places "Table A" type (e.g. `dental_clinic`, `gym`) used as the
+   * category filter. Filtering server-side beats keyword-matching because
+   * Google resolves it against the place's own primary type.
+   */
+  includedType?: string;
+}
+
+export interface CompetitorSearchPage {
+  places: PlaceSearchResultExtended[];
+  nextPageToken?: string;
 }
 
 interface SearchTextBodyExtended extends SearchTextBody {
-  maxResultCount?: number;
+  // `maxResultCount` is deprecated in favour of `pageSize`; if both are sent
+  // Google ignores maxResultCount.
+  pageSize?: number;
+  pageToken?: string;
+  includedType?: string;
 }
 
 const SEARCH_FIELD_MASK_EXTENDED = [
@@ -202,9 +228,11 @@ export async function searchPlacesForCompetitor(
   query: string,
   locationBias?: { lat: number; lng: number; radiusMeters?: number },
   options: CompetitorSearchOptions = {},
-): Promise<PlaceSearchResultExtended[]> {
-  const maxResultCount = Math.min(Math.max(options.maxResults ?? 20, 1), 20);
-  const body: SearchTextBodyExtended = { textQuery: query, maxResultCount };
+): Promise<CompetitorSearchPage> {
+  const pageSize = Math.min(Math.max(options.pageSize ?? 20, 1), 20);
+  const body: SearchTextBodyExtended = { textQuery: query, pageSize };
+  if (options.pageToken) body.pageToken = options.pageToken;
+  if (options.includedType) body.includedType = options.includedType;
   if (locationBias) {
     body.locationBias = {
       circle: {
@@ -219,9 +247,12 @@ export async function searchPlacesForCompetitor(
     headers: {
       "Content-Type": "application/json",
       "X-Goog-Api-Key": getApiKey(),
+      // `nextPageToken` is a top-level field, not a `places.*` one — it has
+      // to be in the mask explicitly or Google omits it and pagination
+      // silently stops after the first page.
       "X-Goog-FieldMask": options.includeWebsite
-        ? `${SEARCH_FIELD_MASK_EXTENDED},places.websiteUri`
-        : SEARCH_FIELD_MASK_EXTENDED,
+        ? `${SEARCH_FIELD_MASK_EXTENDED},places.websiteUri,nextPageToken`
+        : `${SEARCH_FIELD_MASK_EXTENDED},nextPageToken`,
     },
     body: JSON.stringify(body),
   });
@@ -231,6 +262,9 @@ export async function searchPlacesForCompetitor(
     throw new Error(`Places searchText failed: ${res.status} ${errText.slice(0, 300)}`);
   }
 
-  const data = await res.json() as { places?: PlaceSearchResultExtended[] };
-  return data.places ?? [];
+  const data = await res.json() as {
+    places?: PlaceSearchResultExtended[];
+    nextPageToken?: string;
+  };
+  return { places: data.places ?? [], nextPageToken: data.nextPageToken };
 }
