@@ -101,26 +101,17 @@ export async function GET() {
   return NextResponse.json({ competitors: enriched });
 }
 
-// POST — add a competitor. Gated on the user having at least one owned
-// location with a place_id (estimates are useless otherwise, and the gate
-// nudges the user through the right onboarding flow).
+// POST — add a competitor.
+//
+// Deliberately NOT gated on the user having an owned location: competitor
+// tracking is useful on its own, and requiring a Google Business Profile
+// connection first blocked people who only want to research a market. Without
+// owned locations the Formula B estimates fall back to calibrationBasis
+// "none", which the UI already handles.
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const { count } = await supabase
-    .from("locations")
-    .select("*", { count: "exact", head: true })
-    .eq("user_id", user.id)
-    .not("place_id", "is", null);
-
-  if (!count || count === 0) {
-    return NextResponse.json(
-      { error: "Add at least one owned location before tracking competitors." },
-      { status: 400 },
-    );
-  }
 
   const body = await req.json().catch(() => ({}));
   const placeId = typeof (body as { placeId?: unknown }).placeId === "string"

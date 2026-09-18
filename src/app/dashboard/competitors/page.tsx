@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ExportButton } from "@/components/ExportButton";
-import { OnboardingGate } from "@/components/OnboardingGate";
 import { exportToExcel } from "@/lib/exportExcel";
 import { timeAgo } from "@/lib/timeAgo";
 import {
@@ -56,8 +55,6 @@ type Competitor = {
   estimates: Estimates;
 };
 
-type OwnedLocation = { id: string; place_id: string | null };
-
 function fmt(n: number | null): string {
   if (n == null) return "—";
   if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
@@ -80,7 +77,6 @@ function prettyHost(url: string): string {
 export default function CompetitorsPage() {
   const router = useRouter();
   const [competitors, setCompetitors] = useState<Competitor[]>([]);
-  const [ownedLocations, setOwnedLocations] = useState<OwnedLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [banner, setBanner] = useState<{ kind: "success" | "error"; msg: string } | null>(null);
 
@@ -89,23 +85,12 @@ export default function CompetitorsPage() {
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [modalCompetitor, setModalCompetitor] = useState<Competitor | null>(null);
 
-  const ownedWithPlaceId = useMemo(
-    () => ownedLocations.filter(l => l.place_id),
-    [ownedLocations],
-  );
-  const hasOwnedWithPlaceId = ownedWithPlaceId.length > 0;
-
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [cRes, lRes] = await Promise.all([
-        fetch("/api/competitors"),
-        fetch("/api/gmb/locations"),
-      ]);
+      const cRes = await fetch("/api/competitors");
       const cJson = await cRes.json() as { competitors?: Competitor[] };
-      const lJson = await lRes.json() as { locations?: OwnedLocation[] };
       setCompetitors(cJson.competitors ?? []);
-      setOwnedLocations(lJson.locations ?? []);
     } catch (e) {
       setBanner({ kind: "error", msg: e instanceof Error ? e.message : "Failed to load competitors" });
     } finally {
@@ -190,9 +175,6 @@ export default function CompetitorsPage() {
     return times.reduce((a, b) => (a > b ? a : b));
   }, [competitors]);
 
-  // No GMB-synced locations at all → onboarding takes over the whole page.
-  if (!loading && ownedLocations.length === 0) return <OnboardingGate />;
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -214,21 +196,19 @@ export default function CompetitorsPage() {
       {/* Keyword box is a shortcut into the search page, which owns filters,
           pagination and the add flow. */}
       <form onSubmit={goToSearch} className="flex items-stretch gap-2">
-        <div className={`flex-1 flex items-center gap-2 bg-bg-card border border-bg-border rounded-lg px-3 py-2 ${!hasOwnedWithPlaceId ? "opacity-60" : ""}`}>
+        <div className="flex-1 flex items-center gap-2 bg-bg-card border border-bg-border rounded-lg px-3 py-2">
           <Search className="h-4 w-4 text-muted shrink-0" />
           <input
             type="text"
             value={query}
             onChange={e => setQuery(e.target.value)}
-            placeholder={hasOwnedWithPlaceId ? "Search for competitors — e.g. dental clinic" : "Add an owned location first to enable competitor search"}
-            disabled={!hasOwnedWithPlaceId}
-            className="flex-1 bg-transparent text-sm placeholder:text-muted focus:outline-none disabled:cursor-not-allowed"
+            placeholder="Search for competitors — e.g. dental clinic"
+            className="flex-1 bg-transparent text-sm placeholder:text-muted focus:outline-none"
           />
         </div>
         <button
           type="submit"
-          disabled={!hasOwnedWithPlaceId}
-          className="shrink-0 inline-flex items-center gap-2 bg-brand-indigo hover:bg-indigo-600 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-lg text-sm font-medium text-white"
+          className="shrink-0 inline-flex items-center gap-2 bg-brand-indigo hover:bg-indigo-600 px-4 py-2 rounded-lg text-sm font-medium text-white"
         >
           <Search className="h-4 w-4" />
           <span className="hidden sm:inline">Find competitors</span>
@@ -249,16 +229,6 @@ export default function CompetitorsPage() {
 
       {loading ? (
         <div className="flex items-center gap-2 text-muted text-sm"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
-      ) : !hasOwnedWithPlaceId ? (
-        <div className="bg-bg-card border border-bg-border rounded-xl p-8 text-center">
-          <MapPin className="h-8 w-8 mx-auto text-brand-indigo mb-3" />
-          <p className="text-sm text-muted mb-4">
-            Add at least one location in My Locations before tracking competitors.
-          </p>
-          <Link href="/dashboard/locations" className="inline-block bg-brand-indigo hover:bg-indigo-600 px-4 py-2 rounded-lg text-sm font-medium text-white">
-            Go to My Locations
-          </Link>
-        </div>
       ) : competitors.length === 0 ? (
         <div className="bg-bg-card border border-bg-border rounded-xl p-8 text-center text-sm text-muted">
           Track competitors to benchmark your locations.{" "}
